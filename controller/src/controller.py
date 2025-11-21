@@ -2,6 +2,8 @@ from multiprocessing import Process, Event, set_start_method
 import pygame
 import time
 import webview
+import urllib.request
+import json
 
 
 class Main:
@@ -40,6 +42,15 @@ class Main:
                 buttons = [joystick.get_button(i) for i in range(joystick.get_numbuttons())]
                 hats = [joystick.get_hat(i) for i in range(joystick.get_numhats())]
 
+                payload = {
+                    "axes": axes,
+                    "buttons": buttons,
+                    "hats": hats,
+                }
+
+
+                self.http_post_json("http://192.168.1.134:8080/mando", payload)
+
                 print(
                     "\rEjes:", ["{:+.2f}".format(a) for a in axes],
                     " Botones:", buttons,
@@ -56,9 +67,21 @@ class Main:
             pygame.quit()
             print("\nController process finished")
 
+    def http_post_json(self, url, payload):
+        try:
+            data = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(
+                url,
+                data=data,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=1)
+        except Exception as e:
+            print(f"[HTTP] Error: {e}")
 
     def run_camera(self):
-        webview.create_window("Papaya Pathfinder", "http://192.168.1.131/")
+        webview.create_window("Papaya Pathfinder", "http://192.168.1.134/")
         webview.start()
 
 
