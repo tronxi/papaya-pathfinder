@@ -12,6 +12,14 @@ void startCameraServer();
 #define RGB_PIN 48
 #define NUM_PIXELS  1
 
+#define PWMA 40
+#define AIN1 41
+#define AIN2 42
+#define PWMB 38
+#define BIN1 20
+#define BIN2 21
+#define STBY 39
+
 
 Adafruit_NeoPixel rgb(NUM_PIXELS, RGB_PIN, NEO_GRB + NEO_KHZ800);
 WebServer server(8080); 
@@ -107,6 +115,25 @@ void setup() {
 
   server.on("/mando", HTTP_POST, handlePostData);
   server.begin();
+
+
+  pinMode(AIN1, OUTPUT);
+  pinMode(AIN2, OUTPUT);
+  pinMode(BIN1, OUTPUT);
+  pinMode(BIN2, OUTPUT);
+  pinMode(STBY, OUTPUT);
+
+  analogWriteFrequency(PWMA, 20000);
+  analogWriteResolution(PWMA, 8);
+  analogWriteFrequency(PWMB, 20000);
+  analogWriteResolution(PWMB, 8);
+
+  digitalWrite(STBY, HIGH);
+
+  stopMotorA();
+  stopMotorB();
+  led(255, 20, 147);
+  Serial.println("Ready");
 }
 
 void loop() {
@@ -120,8 +147,6 @@ void handlePostData() {
   }
 
   String json = server.arg("plain");
-  Serial.println("Received:");
-  Serial.println(json);
 
   StaticJsonDocument<1024> doc;
 
@@ -133,34 +158,107 @@ void handlePostData() {
     return;
   }
 
+  float right = doc["axes"][3];
+  uint8_t speed = abs(right) * 255;
+  if (speed > 253) speed = 255;
+  if (right > 0) {
+    Serial.print("adelanteR: ");
+    Serial.println(speed);
+    startMotorA(speed, 1);
+
+  } else if (right < 0) {
+    Serial.print("atrasR: ");
+    Serial.println(speed);
+    startMotorA(speed, 0);
+  } else {
+    stopMotorA();
+  }
+
+  float left = doc["axes"][1];
+  uint8_t speedLeft = abs(left) * 255;
+  if (speedLeft > 253) speedLeft = 255;
+  if (left > 0) {
+    Serial.print("adelanteL: ");
+    Serial.println(speedLeft);
+    startMotorB(speedLeft, 1);
+
+  } else if (left < 0) {
+    Serial.print("atrasL: ");
+    Serial.println(speedLeft);
+    startMotorB(speedLeft, 0);
+  } else {
+    stopMotorB();
+  }
+
   JsonArray buttons = doc["buttons"];
 
   bool x_pressed = false;
   bool y_pressed = false;
+  bool a_pressed = false;
+  bool b_pressed = false;
 
   if (buttons.size() > 3) {
     x_pressed = buttons[2] == 1;
     y_pressed = buttons[3] == 1;
+    a_pressed = buttons[0] == 1;
+    b_pressed = buttons[1] == 1;
   }
 
-  if (x_pressed) {
-    Serial.println("X pressed!");
-    encenderLed();
-  }
   if (y_pressed) {
-    Serial.println("Y pressed!");
-    apagarLed();
+    led(255, 140, 0);
+  }
+  if (x_pressed) {
+    led(59, 111, 209);
+  }
+  if (b_pressed) {
+    led(255, 0, 0);
+  }
+  if (a_pressed) {
+    led(16, 124, 16);
   }
 
   server.send(200, "application/json", "{\"status\":\"ok\"}");
 }
 
-void encenderLed() {
-  rgb.setPixelColor(0, rgb.Color(0, 0, 255));
+void led(int r, int g, int b) {
+  rgb.setPixelColor(0, rgb.Color(r, g, b));
   rgb.show();
 }
 
-void apagarLed() {
-  rgb.setPixelColor(0, rgb.Color(0, 255, 0));
-  rgb.show();
+void startMotorA(uint8_t speed, uint8_t direction) {
+
+  if (direction == 1) {
+    digitalWrite(AIN1, HIGH);
+    digitalWrite(AIN2, LOW);
+  } else {
+    digitalWrite(AIN1, LOW);
+    digitalWrite(AIN2, HIGH);
+  }
+
+  analogWrite(PWMA, speed);
+}
+
+void startMotorB(uint8_t speed, uint8_t direction) {
+
+  if (direction == 1) {
+    digitalWrite(BIN1, HIGH);
+    digitalWrite(BIN2, LOW);
+  } else {
+    digitalWrite(BIN1, LOW);
+    digitalWrite(BIN2, HIGH);
+  }
+
+  analogWrite(PWMB, speed);
+}
+
+void stopMotorA() {
+  digitalWrite(AIN1, LOW);
+  digitalWrite(AIN2, LOW);
+  analogWrite(PWMA, 0);
+}
+
+void stopMotorB() {
+  digitalWrite(BIN1, LOW);
+  digitalWrite(BIN2, LOW);
+  analogWrite(PWMB, 0);
 }

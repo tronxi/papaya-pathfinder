@@ -10,6 +10,7 @@ class Main:
 
     def __init__(self):
         set_start_method("spawn")
+        self.ip = "http://192.168.1.128"
 
         stop_event = Event()
 
@@ -48,8 +49,7 @@ class Main:
                     "hats": hats,
                 }
 
-
-                self.http_post_json("http://192.168.1.134:8080/mando", payload)
+                self.http_post_json(self.ip + ":8080/mando", payload)
 
                 print(
                     "\rEjes:", ["{:+.2f}".format(a) for a in axes],
@@ -81,7 +81,7 @@ class Main:
             print(f"[HTTP] Error: {e}")
 
     def run_camera(self):
-        webview.create_window("Papaya Pathfinder", "http://192.168.1.134/")
+        webview.create_window("Papaya Pathfinder", self.ip)
         webview.start()
 
 
