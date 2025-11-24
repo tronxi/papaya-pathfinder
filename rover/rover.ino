@@ -12,8 +12,8 @@ void startCameraServer();
 #define RGB_PIN 48
 #define NUM_PIXELS  1
 
-#define PWMA 40
-#define AIN1 41
+#define PWMA 41
+#define AIN1 40
 #define AIN2 42
 #define PWMB 38
 #define BIN1 20
@@ -162,32 +162,23 @@ void handlePostData() {
   uint8_t speed = abs(right) * 255;
   if (speed > 253) speed = 255;
   if (right > 0) {
-    Serial.print("adelanteR: ");
-    Serial.println(speed);
-    startMotorA(speed, 1);
-
+    startMotorB(speed, 1);
   } else if (right < 0) {
-    Serial.print("atrasR: ");
-    Serial.println(speed);
-    startMotorA(speed, 0);
+    startMotorB(speed, 0);
   } else {
-    stopMotorA();
+    stopMotorB();
   }
 
   float left = doc["axes"][1];
   uint8_t speedLeft = abs(left) * 255;
   if (speedLeft > 253) speedLeft = 255;
   if (left > 0) {
-    Serial.print("adelanteL: ");
-    Serial.println(speedLeft);
-    startMotorB(speedLeft, 1);
+    startMotorA(speedLeft, 1);
 
   } else if (left < 0) {
-    Serial.print("atrasL: ");
-    Serial.println(speedLeft);
-    startMotorB(speedLeft, 0);
+    startMotorA(speedLeft, 0);
   } else {
-    stopMotorB();
+    stopMotorA();
   }
 
   JsonArray buttons = doc["buttons"];
