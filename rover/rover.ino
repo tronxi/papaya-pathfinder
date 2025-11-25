@@ -33,10 +33,26 @@ void setup() {
   rgb.setPixelColor(0, rgb.Color(255, 0, 0));
   rgb.show();
 
+  pinMode(AIN1, OUTPUT);
+  pinMode(AIN2, OUTPUT);
+  pinMode(BIN1, OUTPUT);
+  pinMode(BIN2, OUTPUT);
+  pinMode(STBY, OUTPUT);
+
+  analogWriteFrequency(PWMA, 20000);
+  analogWriteResolution(PWMA, 8);
+  analogWriteFrequency(PWMB, 20000);
+  analogWriteResolution(PWMB, 8);
+
+  digitalWrite(STBY, HIGH);
+
+  stopMotorA();
+  stopMotorB();
+
 
   camera_config_t config;
-  config.ledc_channel = LEDC_CHANNEL_0;
-  config.ledc_timer   = LEDC_TIMER_0;
+  config.ledc_channel = LEDC_CHANNEL_1;
+  config.ledc_timer   = LEDC_TIMER_1;
 
   config.pin_d0       = Y2_GPIO_NUM;
   config.pin_d1       = Y3_GPIO_NUM;
@@ -113,25 +129,10 @@ void setup() {
   Serial.print(WiFi.localIP());
   Serial.println("' to connect");
 
-  server.on("/mando", HTTP_POST, handlePostData);
+  server.on("/controller", HTTP_POST, handlePostData);
   server.begin();
 
 
-  pinMode(AIN1, OUTPUT);
-  pinMode(AIN2, OUTPUT);
-  pinMode(BIN1, OUTPUT);
-  pinMode(BIN2, OUTPUT);
-  pinMode(STBY, OUTPUT);
-
-  analogWriteFrequency(PWMA, 20000);
-  analogWriteResolution(PWMA, 8);
-  analogWriteFrequency(PWMB, 20000);
-  analogWriteResolution(PWMB, 8);
-
-  digitalWrite(STBY, HIGH);
-
-  stopMotorA();
-  stopMotorB();
   led(255, 20, 147);
   Serial.println("Ready");
 }

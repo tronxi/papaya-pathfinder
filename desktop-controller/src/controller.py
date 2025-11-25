@@ -49,7 +49,7 @@ class Main:
                     "hats": hats,
                 }
 
-                self.http_post_json(self.ip + ":8080/mando", payload)
+                self.http_post_json(self.ip + ":8080/controller", payload)
 
                 print(
                     "\rEjes:", ["{:+.2f}".format(a) for a in axes],
