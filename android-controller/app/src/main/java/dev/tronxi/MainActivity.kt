@@ -15,6 +15,9 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
+import dev.tronxi.models.ControllerViewModel
+import dev.tronxi.screens.ControllerScreen
+import dev.tronxi.screens.IpScreen
 import dev.tronxi.ui.theme.AndroidControllerTheme
 
 class MainActivity : ComponentActivity() {

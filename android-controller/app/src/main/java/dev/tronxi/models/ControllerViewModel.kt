@@ -1,10 +1,11 @@
-package dev.tronxi
+package dev.tronxi.models
 
 import android.view.MotionEvent
 import androidx.lifecycle.ViewModel
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlin.math.abs
 
 data class VerticalSticks(
     val left: Float = 0f,
@@ -30,6 +31,6 @@ class ControllerViewModel : ViewModel() {
     }
 
     private fun applyDeadzone(value: Float, deadzone: Float = 0.1f): Float {
-        return if (kotlin.math.abs(value) < deadzone) 0f else value
+        return if (abs(value) < deadzone) 0f else value
     }
 }

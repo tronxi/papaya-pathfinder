@@ -1,4 +1,4 @@
-package dev.tronxi
+package dev.tronxi.screens
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -36,6 +36,7 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.NetworkInterface
 import java.net.Socket
+import kotlin.collections.iterator
 
 @Composable
 fun IpScreen(onConnect: (String) -> Unit) {

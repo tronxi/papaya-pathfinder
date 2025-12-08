@@ -1,13 +1,18 @@
-package dev.tronxi
+package dev.tronxi.screens
 
+import android.app.Activity
+import android.content.pm.ActivityInfo
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import dev.tronxi.models.ControllerViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -17,6 +22,22 @@ import java.net.URL
 
 @Composable
 fun ControllerScreen(
+    ip: String,
+    controllerViewModel: ControllerViewModel
+) {
+    val activity = LocalContext.current as Activity
+    DisposableEffect(Unit) {
+        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        onDispose {
+            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+
+    ControllerScreenUI(ip, controllerViewModel)
+}
+
+@Composable
+fun ControllerScreenUI(
     ip: String,
     controllerViewModel: ControllerViewModel
 ) {
