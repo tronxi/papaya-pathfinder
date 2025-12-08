@@ -30,7 +30,7 @@ void setup() {
   rgb.begin();
   rgb.show();
 
-  rgb.setPixelColor(0, rgb.Color(255, 0, 0));
+  rgb.setPixelColor(0, rgb.Color(255, 255, 255));
   rgb.show();
 
   pinMode(AIN1, OUTPUT);
@@ -107,21 +107,35 @@ void setup() {
     s->set_saturation(s, -2);
   }
 
-  #if defined(LED_GPIO_NUM)
-    setupLedFlash();
-  #endif
+  bool connected = false;
 
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  WiFi.setSleep(false);
-
-  Serial.print("WiFi connecting");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
+  Serial.print("Attempting WiFi 1: ");
+  Serial.println(WIFI_SSID_1);
+  
+  if (connectToWiFi(WIFI_SSID_1, WIFI_PASSWORD_1, 10000)) {
+    Serial.println("Connected to WiFi 1");
+    led(0, 0, 255);
+    connected = true;
+  } 
+  
+  if (!connected) {
+    Serial.println("WiFi 1 failed. Waiting to try WiFi 2...");
+    delay(1000); 
+    
+    Serial.print("Attempting WiFi 2: ");
+    Serial.println(WIFI_SSID_2);
+    
+    if (connectToWiFi(WIFI_SSID_2, WIFI_PASSWORD_2, 10000)) {
+      Serial.println("Connected to WiFi 2");
+      led(0, 255, 0);
+      connected = true;
+    }
   }
-  Serial.println();
-  Serial.print("WiFi connected, IP: ");
-  Serial.println(WiFi.localIP());
+
+  if (!connected) {
+    Serial.println("ERROR: Could not connect to any WiFi network.");
+    led(255, 0, 0);
+  }
 
   startCameraServer();
 
@@ -133,12 +147,33 @@ void setup() {
   server.begin();
 
 
-  led(255, 20, 147);
   Serial.println("Ready");
 }
 
 void loop() {
   server.handleClient();
+}
+
+bool connectToWiFi(const char* ssid, const char* pass, uint32_t timeoutMs) {
+    WiFi.disconnect(true); 
+    WiFi.mode(WIFI_OFF);   
+    delay(200);            
+
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid, pass);
+    WiFi.setSleep(false);   
+
+    Serial.print("Connecting to ");
+    Serial.print(ssid);
+
+    uint32_t start = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - start < timeoutMs) {
+        delay(500);
+        Serial.print(".");
+    }
+    Serial.println();
+
+    return WiFi.status() == WL_CONNECTED;
 }
 
 void handlePostData() {
@@ -180,33 +215,6 @@ void handlePostData() {
     startMotorA(speedLeft, 0);
   } else {
     stopMotorA();
-  }
-
-  JsonArray buttons = doc["buttons"];
-
-  bool x_pressed = false;
-  bool y_pressed = false;
-  bool a_pressed = false;
-  bool b_pressed = false;
-
-  if (buttons.size() > 3) {
-    x_pressed = buttons[2] == 1;
-    y_pressed = buttons[3] == 1;
-    a_pressed = buttons[0] == 1;
-    b_pressed = buttons[1] == 1;
-  }
-
-  if (y_pressed) {
-    led(255, 140, 0);
-  }
-  if (x_pressed) {
-    led(59, 111, 209);
-  }
-  if (b_pressed) {
-    led(255, 0, 0);
-  }
-  if (a_pressed) {
-    led(16, 124, 16);
   }
 
   server.send(200, "application/json", "{\"status\":\"ok\"}");
