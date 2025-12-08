@@ -1,5 +1,7 @@
 # Papaya Pathfinder
 
+![Papaya Pathfinder patch](patch.png)
+
 Papaya Pathfinder is a small remote-controlled rover based on an ESP32-S3-CAM.  
 It streams live video over WiFi and receives movement commands through a simple HTTP API.  
 The rover uses a single motor driver capable of controlling six N20 DC gear motors with proportional PWM.
