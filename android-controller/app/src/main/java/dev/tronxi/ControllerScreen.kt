@@ -1,16 +1,13 @@
 package dev.tronxi
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -29,22 +26,11 @@ fun ControllerScreen(
             sendControllerState(ip, sticks.left, sticks.right)
         }
     }
-    Scaffold { innerPadding ->
-        Column(
-            modifier = Modifier
-                .padding(innerPadding)
-                .fillMaxSize()
-                .padding(24.dp)
-        ) {
-            Text(text = "Connected to: $ip")
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text("Left: ${sticks.left}")
-            Text("Right: ${sticks.right}")
-
-            Spacer(modifier = Modifier.height(16.dp))
-        }
+    Box(modifier = Modifier.fillMaxSize()) {
+        RoverWebView(
+            url = ip,
+            modifier = Modifier.fillMaxSize()
+        )
     }
 }
 
@@ -85,4 +71,24 @@ fun sendControllerState(ip: String, left: Float, right: Float) {
 
     conn.inputStream.use { }
     conn.disconnect()
+}
+
+@Composable
+fun RoverWebView(
+    url: String,
+    modifier: Modifier = Modifier
+) {
+    AndroidView(
+        modifier = modifier,
+        factory = { context ->
+            WebView(context).apply {
+                settings.javaScriptEnabled = true
+                webViewClient = WebViewClient()
+                loadUrl(url)
+            }
+        },
+        update = { webView ->
+            webView.loadUrl(url)
+        }
+    )
 }
