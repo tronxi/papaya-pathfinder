@@ -17,15 +17,20 @@ import java.net.URL
 
 @Composable
 fun ControllerScreen(
-    ip: String, controllerViewModel: ControllerViewModel
+    ip: String,
+    controllerViewModel: ControllerViewModel
 ) {
     val sticks = controllerViewModel.sticks
 
     LaunchedEffect(sticks) {
         withContext(Dispatchers.IO) {
-            sendControllerState(ip, sticks.left, sticks.right)
+            try {
+                sendControllerState(ip, sticks.left, sticks.right)
+            } catch (_: Exception) {
+            }
         }
     }
+
     Box(modifier = Modifier.fillMaxSize()) {
         RoverWebView(
             url = ip,
@@ -35,42 +40,47 @@ fun ControllerScreen(
 }
 
 fun sendControllerState(ip: String, left: Float, right: Float) {
-    val url = URL("$ip:8080/controller")
+    try {
+        val url = URL("$ip:8080/controller")
 
-    val axes = JSONArray().apply {
-        put(0f)
-        put(left)
-        put(0f)
-        put(right)
+        val axes = JSONArray().apply {
+            put(0f)
+            put(left)
+            put(0f)
+            put(right)
+        }
+
+        val buttons = JSONArray().apply {
+            repeat(14) { put(0) }
+        }
+
+        val hats = JSONArray().apply {
+            put(JSONArray().apply {
+                put(0)
+                put(0)
+            })
+        }
+
+        val payload = JSONObject().apply {
+            put("axes", axes)
+            put("buttons", buttons)
+            put("hats", hats)
+        }
+
+        val conn = url.openConnection() as HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.setRequestProperty("Content-Type", "application/json")
+        conn.doOutput = true
+
+        conn.outputStream.use { os ->
+            os.write(payload.toString().toByteArray())
+        }
+
+        conn.inputStream.use { }
+
+        conn.disconnect()
+    } catch (_: Exception) {
     }
-
-    val buttons = JSONArray().apply {
-        repeat(14) { put(0) }
-    }
-
-    val hats = JSONArray().apply {
-        put(JSONArray().apply {
-            put(0)
-            put(0)
-        })
-    }
-
-    val payload = JSONObject().apply {
-        put("axes", axes)
-        put("buttons", buttons)
-        put("hats", hats)
-    }
-    val conn = url.openConnection() as HttpURLConnection
-    conn.requestMethod = "POST"
-    conn.setRequestProperty("Content-Type", "application/json")
-    conn.doOutput = true
-
-    conn.outputStream.use { os ->
-        os.write(payload.toString().toByteArray())
-    }
-
-    conn.inputStream.use { }
-    conn.disconnect()
 }
 
 @Composable
