@@ -173,12 +173,12 @@ suspend fun scanNetwork(): List<HostInfo> = withContext(Dispatchers.IO) {
         async(Dispatchers.IO) {
             val ip = base + i
 
-            if (!isReachable(ip, 200)) {
+            if (!isReachable(ip, 800)) {
                 return@async null
             }
 
-            val open80 = isPortOpen(ip, 80, 200)
-            val open8080 = isPortOpen(ip, 8080, 200)
+            val open80 = isPortOpen(ip, 80, 800)
+            val open8080 = isPortOpen(ip, 8080, 800)
 
             HostInfo(ip = ip, port80Open = open80, port8080Open = open8080)
         }
