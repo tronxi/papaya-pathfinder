@@ -1,6 +1,8 @@
 # Papaya Pathfinder
 
-![Papaya Pathfinder patch](patch.png)
+<div style="text-align: center;">
+  <img src="patch.png" alt="Papaya Pathfinder patch" width="250"/>
+</div>
 
 Papaya Pathfinder is a small remote-controlled rover based on an ESP32-S3-CAM.  
 It streams live video over WiFi and receives movement commands through a simple HTTP API.  
