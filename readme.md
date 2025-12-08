@@ -8,6 +8,9 @@ Papaya Pathfinder is a small remote-controlled rover based on an ESP32-S3-CAM.
 It streams live video over WiFi and receives movement commands through a simple HTTP API.  
 The rover uses a single motor driver capable of controlling six N20 DC gear motors with proportional PWM.
 
+All mechanical parts of the rover are fully 3D-printable, and all models are available in the `3d-models/` directory.
+
+
 ## Hardware Components
 - **ESP32-S3-CAM** — handles control logic, WiFi communication, and real-time video streaming.
 - **Motor driver** — controls all six motors with independent direction and proportional PWM.
@@ -19,8 +22,6 @@ The rover uses a single motor driver capable of controlling six N20 DC gear moto
 - **Android mobile app** — displays the live video stream and enables rover control using a gamepad, providing the same driving experience available on the desktop controller.
 
 ## 3D-Printed Parts
-
-All mechanical parts are fully 3D-printable.  
 Use **PETG or PLA** for the structural parts, and **TPU** for the tires.
 
 You must choose **one rim size** and print the **matching tires**:
