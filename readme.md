@@ -18,5 +18,29 @@ The rover uses a single motor driver capable of controlling six N20 DC gear moto
 - **Python desktop controller** — displays the live video stream and sends gamepad-based control commands to the rover via HTTP.
 - **Android mobile app** — displays the live video stream and enables rover control using a gamepad, providing the same driving experience available on the desktop controller.
 
+## 3D-Printed Parts
+
+All mechanical parts are fully 3D-printable.  
+Use **PETG or PLA** for the structural parts, and **TPU** for the tires.
+
+You must choose **one rim size** and print the **matching tires**:
+- **32 mm rims → 42 mm tires**
+- **35 mm rims → 50 mm tires**
+
+| File | Qty | Material | Notes |
+|------|-----|----------|-------|
+| `body.stl` | 1 | PETG / PLA | Main chassis |
+| `arm_left.stl` | 1 | PETG / PLA | Left suspension arm |
+| `arm_right.stl` | 1 | PETG / PLA | Right suspension arm |
+| `pivot_left.stl` | 1 | PETG / PLA | Left pivot mount |
+| `pivot_right.stl` | 1 | PETG / PLA | Right pivot mount |
+| `motor_retainer.stl` | 6 | PETG / PLA | Holds each N20 motor |
+| `rim_32mm.stl` | 6 | PETG / PLA | Compatible tires: `tire_42mm_v1`, `tire_42mm_v2` |
+| `rim_35mm.stl` | 6 | PETG / PLA | Compatible tire: `tire_50mm` |
+| `tire_42mm_v1.stl` | 6 | **TPU** | For 32 mm rim |
+| `tire_42mm_v2.stl` | 6 | **TPU** | For 32 mm rim |
+| `tire_50mm.stl` | 6 | **TPU** | For 35 mm rim |
+
+
 
 
