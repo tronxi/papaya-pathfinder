@@ -28,19 +28,20 @@ You must choose **one rim size** and print the **matching tires**:
 - **32 mm rims → 42 mm tires**
 - **35 mm rims → 50 mm tires**
 
-| File | Qty | Material | Notes |
-|------|-----|----------|-------|
-| `body.stl` | 1 | PETG / PLA | Main chassis |
-| `arm_left.stl` | 1 | PETG / PLA | Left suspension arm |
-| `arm_right.stl` | 1 | PETG / PLA | Right suspension arm |
-| `pivot_left.stl` | 1 | PETG / PLA | Left pivot mount |
-| `pivot_right.stl` | 1 | PETG / PLA | Right pivot mount |
-| `motor_retainer.stl` | 6 | PETG / PLA | Holds each N20 motor |
-| `rim_32mm.stl` | 6 | PETG / PLA | Compatible tires: `tire_42mm_v1`, `tire_42mm_v2` |
-| `rim_35mm.stl` | 6 | PETG / PLA | Compatible tire: `tire_50mm` |
-| `tire_42mm_v1.stl` | 6 | **TPU** | For 32 mm rim |
-| `tire_42mm_v2.stl` | 6 | **TPU** | For 32 mm rim |
-| `tire_50mm.stl` | 6 | **TPU** | For 35 mm rim |
+| File                 | Qty | Material | Notes                                            |
+|----------------------|-----|----------|--------------------------------------------------|
+| `body.stl`           | 1 | PETG / PLA | Main chassis                                     |
+| `arm_left.stl`       | 1 | PETG / PLA | Left suspension arm                              |
+| `arm_right.stl`      | 1 | PETG / PLA | Right suspension arm                             |
+| `pivot_left.stl`     | 1 | PETG / PLA | Left pivot mount                                 |
+| `pivot_right.stl`    | 1 | PETG / PLA | Right pivot mount                                |
+| `motor_retainer.stl` | 6 | PETG / PLA | Holds each N20 motor                             |
+| `rim_32mm.stl`       | 6 | PETG / PLA | Compatible tires: `tire_42mm_v1`, `tire_42mm_v2` |
+| `rim_35mm.stl`       | 6 | PETG / PLA | Compatible tires: `tire_50mm_v1`, `tire_50mm_v2` |
+| `tire_42mm_v1.stl`   | 6 | **TPU** | For 32 mm rim                                    |
+| `tire_42mm_v2.stl`   | 6 | **TPU** | For 32 mm rim                                    |
+| `tire_50mm_v1.stl`   | 6 | **TPU** | For 35 mm rim                                    |
+| `tire_50mm_v2.stl`   | 6 | **TPU** | For 35 mm rim                                    |
 
 
 
