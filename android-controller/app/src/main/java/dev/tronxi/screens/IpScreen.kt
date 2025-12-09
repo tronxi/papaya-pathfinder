@@ -136,6 +136,7 @@ fun IpScreen(onConnect: (String) -> Unit) {
                                 .padding(vertical = 4.dp)
                                 .clickable {
                                     ip = "http://${dev.ip}"
+                                    onConnect(ip)
                                 },
                             colors = if (dev.port80Open && dev.port8080Open)
                                 CardDefaults.cardColors(containerColor = Color(0xFFB2FFB2)) // verde suave
