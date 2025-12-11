@@ -10,7 +10,7 @@ class Main:
 
     def __init__(self):
         set_start_method("spawn")
-        self.ip = "http://192.168.1.128"
+        self.ip = "http://192.168.1.129"
         # self.ip = "http://10.99.98.51"
 
         stop_event = Event()
