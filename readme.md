@@ -22,6 +22,9 @@ All mechanical parts of the rover are fully 3D-printable, and all models are ava
 - **Android mobile app** — displays the live video stream and enables rover control using a gamepad, providing the same driving experience available on the desktop controller.
 
 ## 3D-Printed Parts
+<div style="text-align: center;">
+  <img src="3d-models/model.png" alt="Papaya Pathfinder model" width="250"/>
+</div>
 Use **PETG or PLA** for the structural parts, and **TPU** for the tires.
 
 You must choose **one rim size** and print the **matching tires**:
