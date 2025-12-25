@@ -23,31 +23,24 @@ All mechanical parts of the rover are fully 3D-printable, and all models are ava
 
 ## 3D-Printed Parts
 <div style="text-align: center;">
-  <img src="3d-models/model.png" alt="Papaya Pathfinder model" width="250"/>
+  <img src="pathfinder-mini/3d-models/model.png" alt="Papaya Pathfinder model" width="250"/>
 </div>
 
 Use **PETG or PLA** for the structural parts, and **TPU** for the tires.
 
-You must choose **one rim size** and print the **matching tires**:
-- **32 mm rims → 42 mm tires**
-- **35 mm rims → 50 mm tires**
 
-| File                 | Qty | Material | Notes                                            |
-|----------------------|-----|----------|--------------------------------------------------|
-| `body.stl`           | 1 | PETG / PLA | Main chassis                                     |
-| `arm_left.stl`       | 1 | PETG / PLA | Left suspension arm                              |
-| `arm_right.stl`      | 1 | PETG / PLA | Right suspension arm                             |
-| `pivot_left.stl`     | 1 | PETG / PLA | Left pivot mount                                 |
-| `pivot_right.stl`    | 1 | PETG / PLA | Right pivot mount                                |
-| `differential_bar.stl`   | 1   | PETG / PLA | Central differential bar for the rocker-bogie suspension   |
-| `differential_link.stl`  | 2   | PETG / PLA | Links between the differential bar and each suspension arm |
+| File                | Qty | Material | Notes                                            |
+|---------------------|-----|----------|--------------------------------------------------|
+| `body.stl`          | 1 | PETG / PLA | Main chassis                                     |
+| `arm_left.stl`      | 1 | PETG / PLA | Left suspension arm                              |
+| `arm_right.stl`     | 1 | PETG / PLA | Right suspension arm                             |
+| `pivot_left.stl`    | 1 | PETG / PLA | Left pivot mount                                 |
+| `pivot_right.stl`   | 1 | PETG / PLA | Right pivot mount                                |
+| `differential_bar.stl`  | 1   | PETG / PLA | Central differential bar for the rocker-bogie suspension   |
+| `differential_link.stl` | 2   | PETG / PLA | Links between the differential bar and each suspension arm |
 | `motor_retainer.stl` | 6 | PETG / PLA | Holds each N20 motor                             |
-| `rim_32mm.stl`       | 6 | PETG / PLA | Compatible tires: `tire_42mm_v1`, `tire_42mm_v2` |
-| `rim_35mm.stl`       | 6 | PETG / PLA | Compatible tires: `tire_50mm_v1`, `tire_50mm_v2` |
-| `tire_42mm_v1.stl`   | 6 | **TPU** | For 32 mm rim                                    |
-| `tire_42mm_v2.stl`   | 6 | **TPU** | For 32 mm rim                                    |
-| `tire_50mm_v1.stl`   | 6 | **TPU** | For 35 mm rim                                    |
-| `tire_50mm_v2.stl`   | 6 | **TPU** | For 35 mm rim                                    |
+| `rim.stl`       | 6 | PETG / PLA | Wheel rim |
+| `tire.stl`   | 6 | **TPU** |Tire                                  |
 
 
 
