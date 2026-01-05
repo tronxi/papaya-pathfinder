@@ -7,26 +7,33 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlin.math.abs
 
-data class VerticalSticks(
-    val left: Float = 0f,
-    val right: Float = 0f
+data class Sticks(
+    val leftVertical: Float = 0f,
+    val rightVertical: Float = 0f,
+    val leftHorizontal: Float = 0f,
+    val rightHorizontal: Float = 0f
 )
 
 class ControllerViewModel : ViewModel() {
 
-    var sticks by mutableStateOf(VerticalSticks())
+    var sticks by mutableStateOf(Sticks())
         private set
 
     fun updateFromMotionEvent(event: MotionEvent) {
-        var rawLeft = event.getAxisValue(MotionEvent.AXIS_Y)
-        var rawRight = event.getAxisValue(MotionEvent.AXIS_RZ)
+        var rawLeftV = event.getAxisValue(MotionEvent.AXIS_Y)
+        var rawRightV = event.getAxisValue(MotionEvent.AXIS_RZ)
 
-        rawLeft = -rawLeft
-        rawRight = -rawRight
+        val rawLeftH = event.getAxisValue(MotionEvent.AXIS_X)
+        val rawRightH = event.getAxisValue(MotionEvent.AXIS_Z)
 
-        sticks = VerticalSticks(
-            left = applyDeadzone(rawLeft),
-            right = applyDeadzone(rawRight)
+        rawLeftV = -rawLeftV
+        rawRightV = -rawRightV
+
+        sticks = Sticks(
+            leftVertical = applyDeadzone(rawLeftV),
+            rightVertical = applyDeadzone(rawRightV),
+            leftHorizontal = applyDeadzone(rawLeftH),
+            rightHorizontal = applyDeadzone(rawRightH)
         )
     }
 

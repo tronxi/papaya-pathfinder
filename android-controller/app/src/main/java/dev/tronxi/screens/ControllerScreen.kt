@@ -13,12 +13,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import dev.tronxi.models.ControllerViewModel
+import dev.tronxi.models.Sticks
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import android.util.Log
+
 
 @Composable
 fun ControllerScreen(
@@ -46,7 +49,7 @@ fun ControllerScreenUI(
     LaunchedEffect(sticks) {
         withContext(Dispatchers.IO) {
             try {
-                sendControllerState(ip, sticks.left, sticks.right)
+                sendControllerState(ip, sticks)
             } catch (_: Exception) {
             }
         }
@@ -60,15 +63,16 @@ fun ControllerScreenUI(
     }
 }
 
-fun sendControllerState(ip: String, left: Float, right: Float) {
+fun sendControllerState(ip: String, sticks: Sticks) {
     try {
         val url = URL("$ip:8080/controller")
+        Log.d("Controller", "Sending sticks: $sticks")
 
         val axes = JSONArray().apply {
-            put(0f)
-            put(left)
-            put(0f)
-            put(right)
+            put(sticks.leftHorizontal)
+            put(sticks.leftVertical)
+            put(sticks.rightHorizontal)
+            put(sticks.rightVertical)
         }
 
         val buttons = JSONArray().apply {
