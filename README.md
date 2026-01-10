@@ -43,7 +43,7 @@ All STL files for this rover are available in: **[`pathfinder/3d-models/`](pathf
 The complete mechanical design is also available in **STEP format**: **[`pathfinder/cad/papaya-pathfinder.step`](pathfinder/cad/papaya-pathfinder.step)**
 
 
-Use **PETG or PLA** for the structural parts, and **TPU** for the tires.
+Use **PETG or PLA** for the structural parts, and **TPU** for the tires. All parts are designed to be assembled using **M3 screws and nuts**.
 
 | File                | Qty | Material | Notes                                                  |
 |---------------------|-----|--------|--------------------------------------------------------|
@@ -93,7 +93,7 @@ All STL files for this rover are available in: **[`pathfinder-mini/3d-models/`](
 
 The complete mechanical design is also available in **STEP format**: **[`pathfinder-mini/cad/papaya-pathfinder-mini.step`](pathfinder-mini/cad/papaya-pathfinder-mini.step)**
 
-Use **PETG or PLA** for the structural parts, and **TPU** for the tires.
+Use **PETG or PLA** for the structural parts, and **TPU** for the tires. All parts are designed to be assembled using **M3 screws and nuts**.
 
 | File                | Qty | Material | Notes                                                      |
 |---------------------|-----|------|------------------------------------------------------------|
