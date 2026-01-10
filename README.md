@@ -107,3 +107,8 @@ Use **PETG or PLA** for the structural parts, and **TPU** for the tires.
 | `motor_retainer.stl` | 6 | PETG / PLA | Holds each N20 motor                                       |
 | `rim.stl`       | 6 | PETG / PLA | Wheel rims                                                 |
 | `tire.stl`   | 6 | TPU | Tires                                                      |
+
+## License
+
+This project is licensed under the **Apache License 2.0**.  
+See the [LICENSE](LICENSE) file for details.
