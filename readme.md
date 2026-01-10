@@ -23,7 +23,7 @@ All mechanical parts of the rover are fully 3D-printable, and all models are ava
 
 ## 3D-Printed Parts
 <div style="text-align: center;">
-  <img src="pathfinder-mini/3d-models/model.png" alt="Papaya Pathfinder model" width="250"/>
+  <img src="pathfinder-mini/cad/model.png" alt="Papaya Pathfinder model" width="250"/>
 </div>
 
 Use **PETG or PLA** for the structural parts, and **TPU** for the tires.
