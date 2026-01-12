@@ -4,14 +4,14 @@ import time
 import webview
 import urllib.request
 import json
-
+import os
 
 class Main:
 
     def __init__(self):
         set_start_method("spawn")
-        self.ip = "http://192.168.1.132"
-        # self.ip = "http://10.99.98.51"
+        self.ip = self.get_config_ip()
+        print(f"IP: {self.ip}")
 
         stop_event = Event()
 
@@ -23,6 +23,11 @@ class Main:
         stop_event.set()
         p1.join()
         print("All processes finished.")
+
+    def get_config_ip(self):
+        path = os.path.join(os.path.dirname(__file__), "config.json")
+        with open(path) as f:
+            return json.load(f)["ip"]
 
     def run_controller(self, stop_event: Event):
         pygame.init()
