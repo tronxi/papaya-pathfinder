@@ -3,19 +3,29 @@
 #include <WebServer.h>
 #include <ArduinoJson.h>
 #include "wifi_config.h"
-#include <ESP32Servo.h>
 
-#define SERVO_RF_PIN 4
-#define SERVO_RB_PIN 5
-#define SERVO_LF_PIN 47
-#define SERVO_LB_PIN 21
+#define SERVO_RF_PIN 38
+#define SERVO_RB_PIN 39
+#define SERVO_LF_PIN 41
+#define SERVO_LB_PIN 42
+
+#define SERVO_FREQ 50
+#define SERVO_RES  14
+
 #define RGB_PIN 48
 #define NUM_PIXELS  1
 
-static const int SERVO_CENTER = 90;
-static const int SERVO_MAX_DELTA = 60;
+#define MOTOR_A_RPWM_PIN 12
+#define MOTOR_A_LPWM_PIN 13
 
-Servo rf, rb, lf, lb;
+#define MOTOR_B_RPWM_PIN 10
+#define MOTOR_B_LPWM_PIN 11
+
+#define PWM_FREQ 10000
+#define PWM_RES 8
+
+static const int SERVO_CENTER_ANGLE = 90;
+static const int SERVO_MAX_DELTA = 45;
 
 
 WebServer server(8080);
@@ -23,8 +33,9 @@ Adafruit_NeoPixel rgb(NUM_PIXELS, RGB_PIN, NEO_GRB + NEO_KHZ800);
 
 bool connectToWiFi(const char* ssid, const char* pass, uint32_t timeoutMs);
 void handlePostData();
-void attachServo(Servo& s, int pin);
 void setSteering(float steer);
+void setMotor(float throttle);
+void writeServo(int pin, int angle);
 
 void setup() {
   Serial.begin(115200);
@@ -33,6 +44,23 @@ void setup() {
   rgb.show();
 
   led(255, 255, 255);
+
+  ledcAttach(MOTOR_A_RPWM_PIN, PWM_FREQ, PWM_RES);
+  ledcAttach(MOTOR_A_LPWM_PIN, PWM_FREQ, PWM_RES);
+  ledcWrite(MOTOR_A_RPWM_PIN, 0);
+  ledcWrite(MOTOR_A_LPWM_PIN, 0);
+
+  ledcAttach(MOTOR_B_RPWM_PIN, PWM_FREQ, PWM_RES);
+  ledcAttach(MOTOR_B_LPWM_PIN, PWM_FREQ, PWM_RES);
+  ledcWrite(MOTOR_B_RPWM_PIN, 0);
+  ledcWrite(MOTOR_B_LPWM_PIN, 0);
+
+  ledcAttach(SERVO_RF_PIN, SERVO_FREQ, SERVO_RES);
+  ledcAttach(SERVO_RB_PIN, SERVO_FREQ, SERVO_RES);
+  ledcAttach(SERVO_LF_PIN, SERVO_FREQ, SERVO_RES);
+  ledcAttach(SERVO_LB_PIN, SERVO_FREQ, SERVO_RES);
+
+  setSteering(0.0f);
 
   bool connected = false;
 
@@ -69,14 +97,6 @@ void setup() {
 
   server.on("/controller", HTTP_POST, handlePostData);
   server.begin();
-
-  attachServo(rf, SERVO_RF_PIN);
-  attachServo(rb, SERVO_RB_PIN);
-  attachServo(lf, SERVO_LF_PIN);
-  attachServo(lb, SERVO_LB_PIN);
-
-  setSteering(0.0f);
-
 
   Serial.println("Ready");
 }
@@ -126,30 +146,66 @@ void handlePostData() {
     return;
   }
 
-  setSteering(doc["axes"][0]);
+  float steeringVal = doc["axes"][2];
+  float throttleVal = doc["axes"][1]; 
+
+  setSteering(steeringVal);
+  setMotor(throttleVal);
 
   server.send(200, "application/json", "{\"status\":\"ok\"}");
 }
 
-void attachServo(Servo& s, int pin) {
-  s.setPeriodHertz(50);
-  s.attach(pin, 500, 2400);
+void writeServo(int pin, int angle) {
+  int minAngle = SERVO_CENTER_ANGLE - SERVO_MAX_DELTA;
+  int maxAngle = SERVO_CENTER_ANGLE + SERVO_MAX_DELTA;
+  
+  angle = constrain(angle, minAngle, maxAngle); 
+  int duty = map(angle, 0, 180, 410, 1966);
+  
+  ledcWrite(pin, duty);
 }
 
 void setSteering(float steer) {
   steer = constrain(steer, -1.0f, 1.0f);
   int delta = steer * SERVO_MAX_DELTA;
 
-  int lf_angle = SERVO_CENTER + delta;
-  int rf_angle = SERVO_CENTER - delta;
+  int lf_angle = SERVO_CENTER_ANGLE + delta;
+  int rf_angle = SERVO_CENTER_ANGLE + delta;
+  int lb_angle = SERVO_CENTER_ANGLE - delta;
+  int rb_angle = SERVO_CENTER_ANGLE - delta;
 
-  int lb_angle = SERVO_CENTER - delta;
-  int rb_angle = SERVO_CENTER + delta;
+  writeServo(SERVO_LF_PIN, lf_angle);
+  writeServo(SERVO_RF_PIN, rf_angle);
+  writeServo(SERVO_LB_PIN, lb_angle);
+  writeServo(SERVO_RB_PIN, rb_angle);
+}
 
-  lf.write(constrain(lf_angle, 0, 180));
-  rf.write(constrain(rf_angle, 0, 180));
-  lb.write(constrain(lb_angle, 0, 180));
-  rb.write(constrain(rb_angle, 0, 180));
+void setMotor(float throttle) {
+  throttle = constrain(throttle, -1.0f, 1.0f);
+  
+  int pwmValue = abs(throttle) * 255;
+
+  if (throttle > 0.05) { 
+    ledcWrite(MOTOR_A_RPWM_PIN, 0);
+    ledcWrite(MOTOR_A_LPWM_PIN, pwmValue);
+
+        ledcWrite(MOTOR_B_RPWM_PIN, pwmValue);
+    ledcWrite(MOTOR_B_LPWM_PIN, 0);
+  } 
+  else if (throttle < -0.05) { 
+    ledcWrite(MOTOR_A_RPWM_PIN, pwmValue);
+    ledcWrite(MOTOR_A_LPWM_PIN, 0);
+
+    ledcWrite(MOTOR_B_RPWM_PIN, 0);
+    ledcWrite(MOTOR_B_LPWM_PIN, pwmValue);
+  } 
+  else {
+    ledcWrite(MOTOR_A_RPWM_PIN, 0);
+    ledcWrite(MOTOR_A_LPWM_PIN, 0);
+
+    ledcWrite(MOTOR_B_RPWM_PIN, 0);
+    ledcWrite(MOTOR_B_LPWM_PIN, 0);
+  }
 }
 
 void led(int r, int g, int b) {
