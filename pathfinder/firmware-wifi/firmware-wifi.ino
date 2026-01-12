@@ -10,10 +10,10 @@
 #define SERVO_LB_PIN 42
 
 #define SERVO_FREQ 50
-#define SERVO_RES  14
+#define SERVO_RES 14
 
 #define RGB_PIN 48
-#define NUM_PIXELS  1
+#define NUM_PIXELS 1
 
 #define MOTOR_A_RPWM_PIN 12
 #define MOTOR_A_LPWM_PIN 13
@@ -27,6 +27,10 @@
 static const int SERVO_CENTER_ANGLE = 90;
 static const int SERVO_MAX_DELTA = 45;
 
+int TRIM_LF = 0;
+int TRIM_RF = 0;
+int TRIM_LB = 0;
+int TRIM_RB = 0;
 
 WebServer server(8080);
 Adafruit_NeoPixel rgb(NUM_PIXELS, RGB_PIN, NEO_GRB + NEO_KHZ800);
@@ -106,25 +110,25 @@ void loop() {
 }
 
 bool connectToWiFi(const char* ssid, const char* pass, uint32_t timeoutMs) {
-    WiFi.disconnect(true);
-    WiFi.mode(WIFI_OFF);
-    delay(200);
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+  delay(200);
 
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid, pass);
-    WiFi.setSleep(false);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, pass);
+  WiFi.setSleep(false);
 
-    Serial.print("Connecting to ");
-    Serial.print(ssid);
+  Serial.print("Connecting to ");
+  Serial.print(ssid);
 
-    uint32_t start = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - start < timeoutMs) {
-        delay(500);
-        Serial.print(".");
-    }
-    Serial.println();
+  uint32_t start = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - start < timeoutMs) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println();
 
-    return WiFi.status() == WL_CONNECTED;
+  return WiFi.status() == WL_CONNECTED;
 }
 
 void handlePostData() {
@@ -147,7 +151,7 @@ void handlePostData() {
   }
 
   float steeringVal = doc["axes"][2];
-  float throttleVal = doc["axes"][1]; 
+  float throttleVal = doc["axes"][1];
 
   setSteering(steeringVal);
   setMotor(throttleVal);
@@ -158,10 +162,10 @@ void handlePostData() {
 void writeServo(int pin, int angle) {
   int minAngle = SERVO_CENTER_ANGLE - SERVO_MAX_DELTA;
   int maxAngle = SERVO_CENTER_ANGLE + SERVO_MAX_DELTA;
-  
-  angle = constrain(angle, minAngle, maxAngle); 
+
+  angle = constrain(angle, minAngle, maxAngle);
   int duty = map(angle, 0, 180, 410, 1966);
-  
+
   ledcWrite(pin, duty);
 }
 
@@ -169,10 +173,10 @@ void setSteering(float steer) {
   steer = constrain(steer, -1.0f, 1.0f);
   int delta = steer * SERVO_MAX_DELTA;
 
-  int lf_angle = SERVO_CENTER_ANGLE + delta;
-  int rf_angle = SERVO_CENTER_ANGLE + delta;
-  int lb_angle = SERVO_CENTER_ANGLE - delta;
-  int rb_angle = SERVO_CENTER_ANGLE - delta;
+  int lf_angle = SERVO_CENTER_ANGLE + TRIM_LF + delta;
+  int rf_angle = SERVO_CENTER_ANGLE + TRIM_RF + delta;
+  int lb_angle = SERVO_CENTER_ANGLE + TRIM_LB - delta;
+  int rb_angle = SERVO_CENTER_ANGLE + TRIM_RB - delta;
 
   writeServo(SERVO_LF_PIN, lf_angle);
   writeServo(SERVO_RF_PIN, rf_angle);
@@ -182,24 +186,22 @@ void setSteering(float steer) {
 
 void setMotor(float throttle) {
   throttle = constrain(throttle, -1.0f, 1.0f);
-  
+
   int pwmValue = abs(throttle) * 255;
 
-  if (throttle > 0.05) { 
+  if (throttle > 0.05) {
     ledcWrite(MOTOR_A_RPWM_PIN, 0);
     ledcWrite(MOTOR_A_LPWM_PIN, pwmValue);
 
-        ledcWrite(MOTOR_B_RPWM_PIN, pwmValue);
+    ledcWrite(MOTOR_B_RPWM_PIN, pwmValue);
     ledcWrite(MOTOR_B_LPWM_PIN, 0);
-  } 
-  else if (throttle < -0.05) { 
+  } else if (throttle < -0.05) {
     ledcWrite(MOTOR_A_RPWM_PIN, pwmValue);
     ledcWrite(MOTOR_A_LPWM_PIN, 0);
 
     ledcWrite(MOTOR_B_RPWM_PIN, 0);
     ledcWrite(MOTOR_B_LPWM_PIN, pwmValue);
-  } 
-  else {
+  } else {
     ledcWrite(MOTOR_A_RPWM_PIN, 0);
     ledcWrite(MOTOR_A_LPWM_PIN, 0);
 
