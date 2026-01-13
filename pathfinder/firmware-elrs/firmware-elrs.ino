@@ -1,8 +1,9 @@
-#include <WiFi.h>
+#include <AlfredoCRSF.h>
+#include <HardwareSerial.h>
 #include <Adafruit_NeoPixel.h>
-#include <WebServer.h>
-#include <ArduinoJson.h>
-#include "wifi_config.h"
+
+#define RX_PIN 47
+#define TX_PIN 21
 
 #define SERVO_RF_PIN 38
 #define SERVO_RB_PIN 39
@@ -26,16 +27,14 @@
 
 static const int SERVO_CENTER_ANGLE = 90;
 static const int SERVO_MAX_DELTA = 35;
-static const int SERVO_HARDWARE_MIN = 5; 
-static const int SERVO_HARDWARE_MAX = 175; 
+static const int SERVO_HARDWARE_MIN = 5;
+static const int SERVO_HARDWARE_MAX = 175;
 
 int TRIM_LF = -10;
 int TRIM_RF = 0;
 int TRIM_LB = -5;
 int TRIM_RB = -3;
 
-WebServer server(8080);
-Adafruit_NeoPixel rgb(NUM_PIXELS, RGB_PIN, NEO_GRB + NEO_KHZ800);
 
 bool connectToWiFi(const char* ssid, const char* pass, uint32_t timeoutMs);
 void handlePostData();
@@ -45,12 +44,15 @@ void writeServo(int pin, int angle);
 void setSpin(float spinVal);
 void led(int r, int g, int b);
 
+HardwareSerial crsfSerial(2);
+Adafruit_NeoPixel rgb(NUM_PIXELS, RGB_PIN, NEO_GRB + NEO_KHZ800);
+
+AlfredoCRSF crsf;
+
 void setup() {
   Serial.begin(115200);
-  Serial.setDebugOutput(true);
   rgb.begin();
   rgb.show();
-
   led(255, 255, 255);
 
   ledcAttach(MOTOR_A_RPWM_PIN, PWM_FREQ, PWM_RES);
@@ -70,104 +72,43 @@ void setup() {
 
   setSteering(0.0f);
 
-  bool connected = false;
+  crsfSerial.begin(420000, SERIAL_8N1, RX_PIN, TX_PIN);
 
-  Serial.print("Attempting WiFi 1: ");
-  Serial.println(WIFI_SSID_1);
+  crsf.begin(crsfSerial);
 
-  if (connectToWiFi(WIFI_SSID_1, WIFI_PASSWORD_1, 10000)) {
-    Serial.println("Connected to WiFi 1");
-    led(0, 0, 255);
-    connected = true;
-  }
-
-  if (!connected) {
-    Serial.println("WiFi 1 failed. Waiting to try WiFi 2...");
-    delay(1000);
-
-    Serial.print("Attempting WiFi 2: ");
-    Serial.println(WIFI_SSID_2);
-
-    if (connectToWiFi(WIFI_SSID_2, WIFI_PASSWORD_2, 10000)) {
-      Serial.println("Connected to WiFi 2");
-      led(0, 255, 0);
-      connected = true;
-    }
-  }
-
-  if (!connected) {
-    Serial.println("ERROR: Could not connect to any WiFi network.");
-    led(255, 0, 0);
-  }
-
-  Serial.print(WiFi.localIP());
-  Serial.println("' to connect");
-
-  server.on("/controller", HTTP_POST, handlePostData);
-  server.begin();
-
-  Serial.println("Ready");
+  Serial.println("Starting receiver...");
 }
 
 void loop() {
-  server.handleClient();
-}
+  crsf.update();
 
-bool connectToWiFi(const char* ssid, const char* pass, uint32_t timeoutMs) {
-  WiFi.disconnect(true);
-  WiFi.mode(WIFI_OFF);
-  delay(200);
+  if (crsf.isLinkUp()) {
+    led(0, 255, 0);
 
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, pass);
-  WiFi.setSleep(false);
+    int rawSteering = crsf.getChannel(1);
+    int rawThrottle = crsf.getChannel(3);
+    int rawSpin = crsf.getChannel(4);
 
-  Serial.print("Connecting to ");
-  Serial.print(ssid);
+    float steeringVal = (rawSteering - 1500) / 500.0;
+    float throttleVal = (rawThrottle - 1500) / 500.0;
+    float spinVal = (rawSpin - 1500) / 500.0;
 
-  uint32_t start = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - start < timeoutMs) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println();
+    float deadzone = 0.1;
 
-  return WiFi.status() == WL_CONNECTED;
-}
-
-void handlePostData() {
-  if (!server.hasArg("plain")) {
-    server.send(400, "text/plain", "Missing body");
-    return;
-  }
-
-  String json = server.arg("plain");
-  Serial.println(json);
-
-  StaticJsonDocument<1024> doc;
-
-  DeserializationError err = deserializeJson(doc, json);
-  if (err) {
-    Serial.print("JSON parse error: ");
-    Serial.println(err.c_str());
-    server.send(400, "text/plain", "Bad JSON");
-    return;
-  }
-
-  float steeringVal = doc["axes"][2];
-  float throttleVal = doc["axes"][1];
-  float spinVal = doc["axes"][0];
-
-float deadzone = 0.1;
-
-  if (abs(spinVal) > deadzone && abs(throttleVal) < deadzone && abs(steeringVal) < deadzone) {
-        setSpin(spinVal);
+    if (abs(spinVal) > deadzone && abs(throttleVal) < deadzone && abs(steeringVal) < deadzone) {
+      setSpin(spinVal);
+    } else {
+      if (abs(steeringVal) < deadzone) steeringVal = 0;
+      if (abs(throttleVal) < deadzone) throttleVal = 0;
+      setSteering(steeringVal);
+      setMotor(throttleVal);
+    }
   } else {
-    setSteering(steeringVal);
-    setMotor(throttleVal);
+    led(255, 0, 0);
+    Serial.println("Waiting for transmitter connection...");
   }
 
-  server.send(200, "application/json", "{\"status\":\"ok\"}");
+  delay(20);
 }
 
 void writeServo(int pin, int angle) {
@@ -220,7 +161,7 @@ void setMotor(float throttle) {
 
 void setSpin(float spinVal) {
   spinVal = constrain(spinVal, -1.0f, 1.0f);
-  
+
   int angle = 45;
 
   int lf = SERVO_CENTER_ANGLE + TRIM_LF + angle;
@@ -238,10 +179,10 @@ void setSpin(float spinVal) {
   if (spinVal < 0) {
     ledcWrite(MOTOR_A_RPWM_PIN, 0);
     ledcWrite(MOTOR_A_LPWM_PIN, pwm);
-    
+
     ledcWrite(MOTOR_B_RPWM_PIN, 0);
     ledcWrite(MOTOR_B_LPWM_PIN, pwm);
-    
+
   } else {
     ledcWrite(MOTOR_A_RPWM_PIN, pwm);
     ledcWrite(MOTOR_A_LPWM_PIN, 0);
