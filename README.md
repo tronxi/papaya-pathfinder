@@ -34,6 +34,7 @@ The rover supports multiple firmware configurations, each enabling a different c
   - Control via **ExpressLRS (ELRS)**
 
 ### 3D-Printed Parts
+[![Printables](https://img.shields.io/badge/Printables-Download%20STLs-orange?logo=printables&logoColor=white)](https://www.printables.com/model/1564819-papaya-pathfinder-open-source-esp32-rover)
 <div style="text-align: center;">
   <img src="pathfinder/cad/model.png" alt="Papaya Pathfinder model" width="300"/>
 </div>
@@ -56,7 +57,7 @@ Use **PETG or PLA** for the structural parts, and **TPU** for the tires. All par
 | `differential_link_left.stl` | 1   | PETG / PLA | Left link between differential bar and suspension arm  |
 | `differential_link_right.stl` | 1   | PETG / PLA | Right link between differential bar and suspension arm |
 | `motor_mount.stl`   | 4   | PETG / PLA | Motor mounts for GA25 motors used on steering arms     |
-| `horn_adapter.stl`  | 4   | PETG / PLA | Servo horn adapters for steering servos                |
+| `horn_adapter.stl`  | 4   | PETG / PLA | Servo horn adapters for steering servos. **Print horizontally for strength.**              |
 | `rim.stl`           | 6   | PETG / PLA | Wheel rims                                             |
 | `tire.stl`   | 6 | TPU | Tires                                                  |
 
@@ -85,6 +86,7 @@ The rover supports multiple firmware configurations, each enabling a different c
   - Control via **ExpressLRS (ELRS)**
 
 ### 3D-Printed Parts
+[![Printables](https://img.shields.io/badge/Printables-Download%20STLs-orange?logo=printables&logoColor=white)](https://www.printables.com/model/1564810-papaya-pathfinder-mini-open-source-esp32-rover)
 <div style="text-align: center;">
   <img src="pathfinder-mini/cad/model.png" alt="Papaya Pathfinder Mini model" width="300"/>
 </div>

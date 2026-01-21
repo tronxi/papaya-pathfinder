@@ -33,7 +33,7 @@ static const int SERVO_HARDWARE_MAX = 175;
 int TRIM_LF = -10;
 int TRIM_RF = 0;
 int TRIM_LB = -5;
-int TRIM_RB = -3;
+int TRIM_RB = 0;
 
 
 bool connectToWiFi(const char* ssid, const char* pass, uint32_t timeoutMs);
