@@ -6,7 +6,7 @@
 #define TX_PIN 21
 
 #define SERVO_RF_PIN 38
-#define SERVO_RB_PIN 39
+#define SERVO_RB_PIN 7
 #define SERVO_LF_PIN 41
 #define SERVO_LB_PIN 42
 
