@@ -58,7 +58,8 @@ Use **PETG or PLA** for the structural parts, and **TPU** for the tires. All par
 | `differential_link_right.stl` | 1   | PETG / PLA | Right link between differential bar and suspension arm |
 | `motor_mount.stl`   | 4   | PETG / PLA | Motor mounts for GA25 motors used on steering arms     |
 | `horn_adapter.stl`  | 4   | PETG / PLA | Servo horn adapters for steering servos. **Print horizontally for strength.**              |
-| `rim.stl`           | 6   | PETG / PLA | Wheel rims                                             |
+| `rim.stl` | 6 | PETG / PLA | **Standard option.** Connects directly to the motor shaft (D-shape). Simple, but can strip over time under high torque. |
+| `rim_hexagonal.stl` | 6 | PETG / PLA | **Pro option (Recommended).** Requires **12mm brass hex adapters**. Much stronger connection, prevents the motor shaft from stripping the plastic. |
 | `tire.stl`   | 6 | TPU | Tires                                                  |
 
 ---
