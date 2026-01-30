@@ -74,6 +74,9 @@ Use **PETG or PLA** for the structural parts, and **TPU** for the tires. All par
 
 - Motors
 - Servos
+<div style="text-align: center;">
+  <img src="pathfinder/schematics/servos.png" alt="Papaya Pathfinder servos"/>
+</div>
 - System Overview
 <div style="text-align: center;">
   <img src="pathfinder/schematics/schematics.png" alt="Papaya Pathfinder schematics"/>
