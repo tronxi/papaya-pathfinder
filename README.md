@@ -14,11 +14,15 @@ The rovers can be operated using either **WiFi** or **ExpressLRS (ELRS)**, depen
 
 ## Papaya Pathfinder
 
-- **ESP32**
-- **ELRS receiver** *(required only when running `firmware-elrs`)*
-- **6× GA25 DC gear motors**
-- **4× MS24 steering servos**
-- **Power supply: LiPo 3S**
+- **Controller:** ESP32
+- **Radio:** ELRS receiver *(required only when running `firmware-elrs`)*
+- **Motor Drivers:** 2× BTS7960 43A (or similar high-current driver)
+- **Motors:** 6× GA25 DC gear motors
+- **Steering:** 4× MS24 servos
+- **Power:** LiPo 3S Battery
+- **Voltage Regulation:**
+  - 1× UBEC 5V/3A (for ESP32)
+  - 1× UBEC 6V/8A (High current supply for Servos)
 
 ### Firmware
 The rover supports multiple firmware configurations, each enabling a different communication method.
@@ -61,6 +65,11 @@ Use **PETG or PLA** for the structural parts, and **TPU** for the tires. All par
 | `rim.stl` | 6 | PETG / PLA | **Standard option.** Connects directly to the motor shaft (D-shape). Simple, but can strip over time under high torque. |
 | `rim_hexagonal.stl` | 6 | PETG / PLA | **Pro option (Recommended).** Requires **12mm brass hex adapters**. Much stronger connection, prevents the motor shaft from stripping the plastic. |
 | `tire.stl`   | 6 | TPU | Tires                                                  |
+
+### Wiring Diagram
+<div style="text-align: center;">
+  <img src="pathfinder/schematics/schematics.png" alt="Papaya Pathfinder schematics" width="300"/>
+</div>
 
 ---
 
