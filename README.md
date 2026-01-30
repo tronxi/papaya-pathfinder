@@ -40,7 +40,7 @@ The rover supports multiple firmware configurations, each enabling a different c
 ### 3D-Printed Parts
 [![Printables](https://img.shields.io/badge/Printables-Download%20STLs-orange?logo=printables&logoColor=white)](https://www.printables.com/model/1564819-papaya-pathfinder-open-source-esp32-rover)
 <div style="text-align: center;">
-  <img src="pathfinder/cad/model.png" alt="Papaya Pathfinder model" width="300"/>
+  <img src="pathfinder/cad/model.png" alt="Papaya Pathfinder model" width="600"/>
 </div>
 
 All STL files for this rover are available in: **[`pathfinder/3d-models/`](pathfinder/3d-models/)**
@@ -67,8 +67,16 @@ Use **PETG or PLA** for the structural parts, and **TPU** for the tires. All par
 | `tire.stl`   | 6 | TPU | Tires                                                  |
 
 ### Wiring Diagram
+- Power Distribution
 <div style="text-align: center;">
-  <img src="pathfinder/schematics/schematics.png" alt="Papaya Pathfinder schematics" width="300"/>
+  <img src="pathfinder/schematics/power_distribution.png" alt="Papaya Pathfinder power distribution"/>
+</div>
+
+- Motors
+- Servos
+- System Overview
+<div style="text-align: center;">
+  <img src="pathfinder/schematics/schematics.png" alt="Papaya Pathfinder schematics"/>
 </div>
 
 ---
@@ -98,7 +106,7 @@ The rover supports multiple firmware configurations, each enabling a different c
 ### 3D-Printed Parts
 [![Printables](https://img.shields.io/badge/Printables-Download%20STLs-orange?logo=printables&logoColor=white)](https://www.printables.com/model/1564810-papaya-pathfinder-mini-open-source-esp32-rover)
 <div style="text-align: center;">
-  <img src="pathfinder-mini/cad/model.png" alt="Papaya Pathfinder Mini model" width="300"/>
+  <img src="pathfinder-mini/cad/model.png" alt="Papaya Pathfinder Mini model" width="600"/>
 </div>
 
 All STL files for this rover are available in: **[`pathfinder-mini/3d-models/`](pathfinder-mini/3d-models/)**
