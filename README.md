@@ -98,6 +98,9 @@ Use **PETG or PLA** for the structural parts, and **TPU** for the tires. All par
 - **ELRS receiver** *(required only when running `firmware-elrs`)*
 - **6× N20 DC gear motors**
 - **Power supply: LiPo 2S**
+- **Voltage regulation:**
+  - 1× DC-DC step-down to **5V** (ESP32 / ESP32-CAM)
+  - 1× DC-DC step-down to **6V** (N20 motors)
 
 ### Firmware
 The rover supports multiple firmware configurations, each enabling a different communication method.
