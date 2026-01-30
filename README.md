@@ -67,19 +67,27 @@ Use **PETG or PLA** for the structural parts, and **TPU** for the tires. All par
 | `tire.stl`   | 6 | TPU | Tires                                                  |
 
 ### Wiring Diagram
-- Power Distribution
+- Power Distribution: Shows the rover power distribution, including the LiPo 3S battery,
+  separate UBECs for logic (5V) and servos (6V), and the motor power rails.
 <div style="text-align: center;">
   <img src="pathfinder/schematics/power_distribution.png" alt="Papaya Pathfinder power distribution"/>
 </div>
 
-- Motors
-- Servos
+- Motors: Motor wiring using two BTS7960 drivers, each controlling one side of the rover.
+  The ESP32 provides PWM control signals to each driver.
+<div style="text-align: center;">
+  <img src="pathfinder/schematics/motors.png" alt="Papaya Pathfinder motors"/>
+</div>
+
+- Servos: Servo wiring powered by a dedicated 6V UBEC. PWM control signals are provided by the ESP32.
 <div style="text-align: center;">
   <img src="pathfinder/schematics/servos.png" alt="Papaya Pathfinder servos"/>
 </div>
-- System Overview
+
+- System Overview: High-level overview of the complete rover wiring, combining power,
+  motor drivers, servos and control logic.
 <div style="text-align: center;">
-  <img src="pathfinder/schematics/schematics.png" alt="Papaya Pathfinder schematics"/>
+  <img src="pathfinder/schematics/overview.png" alt="Papaya Pathfinder overview"/>
 </div>
 
 ---
