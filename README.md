@@ -15,7 +15,7 @@ The rovers can be operated using either **WiFi** or **ExpressLRS (ELRS)**, depen
 
 **Watch the Papaya Pathfinder demo on YouTube**
 <div align="center">
-  <a href="https://www.youtube.com/watch?v=BrZb676o0gw">
+  <a href="https://www.youtube.com/watch?v=BrZb676o0gw" target="_blank">
     <img src="https://img.youtube.com/vi/BrZb676o0gw/0.jpg"
          alt="Papaya Pathfinder - Demo Video"
          width="600"/>
