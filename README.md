@@ -12,6 +12,8 @@ All mechanical parts of the rovers are fully **3D-printable**, and all models ar
 
 The rovers can be operated using either **WiFi** or **ExpressLRS (ELRS)**, depending on the firmware configuration.
 
+
+**Watch the Papaya Pathfinder demo on YouTube**
 <div align="center">
   <a href="https://www.youtube.com/watch?v=BrZb676o0gw">
     <img src="https://img.youtube.com/vi/BrZb676o0gw/0.jpg"
