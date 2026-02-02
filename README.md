@@ -150,7 +150,15 @@ Use **PETG or PLA** for the structural parts, and **TPU** for the tires. All par
 | `differential_link.stl` | 2   | PETG / PLA | Links between the differential bar and each suspension arm |
 | `motor_retainer.stl` | 6 | PETG / PLA | Holds each N20 motor                                       |
 | `rim.stl`       | 6 | PETG / PLA | Wheel rims                                                 |
-| `tire.stl`   | 6 | TPU | Tires                                                      |
+| `tire.stl`   | 6 | TPU | Tires   
+
+### Wiring Diagram
+
+- System Overview: High-level overview of the complete rover wiring, combining power,
+  motor drivers and control logic.
+<div style="text-align: center;">
+  <img src="pathfinder-mini/schematics/overview.png" alt="Papaya Pathfinder Mini overview"/>
+</div>
 
 ## License
 

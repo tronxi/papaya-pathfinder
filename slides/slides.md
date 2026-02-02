@@ -233,7 +233,7 @@ El control del rover se realiza mediante **WiFi**, lo que permite un desarrollo 
 
 ## 6. Papaya Pathfinder Mini: Electrónica
 
-<img src="./figuras/pathfinder-mini.png" alt="papaya-pathfinder-mini">
+<img src="./figuras/pathfinder-mini-overview.png" alt="papaya-pathfinder-mini-overview" height="600">
 
 
 ---
