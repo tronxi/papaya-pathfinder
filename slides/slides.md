@@ -164,13 +164,13 @@ Se plantea como una **plataforma open-source y reproducible** para integrar mec√
   <tbody>
     <tr>
       <td>JPL Open Source Rover</td>
-      <td>Rocker-bogie cl√°sico</td>
+      <td>Rocker-bogie</td>
       <td>Delantera y trasera</td>
       <td>Aluminio mecanizado</td>
     </tr>
     <tr>
       <td>Sawppy</td>
-      <td>Rocker-bogie (inspirado en Curiosity)</td>
+      <td>Rocker-bogie</td>
       <td>Delantera y trasera</td>
       <td>Aluminio + piezas impresas en 3D</td>
     </tr>
