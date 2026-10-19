@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { getGameSidebar, getDrivingPanel } from './ui.js';
+import { createExplorationCatalog } from './exploration-catalog.js';
+import { getDrivingPanel } from './ui.js';
 
 const smooth = THREE.MathUtils.smoothstep;
 const mix = THREE.MathUtils.lerp;
@@ -43,94 +44,14 @@ export function shapeMarsTerrain(x, z, base) {
     return mix(base, height, smooth(Math.hypot(x, z), 10, 22));
 }
 
-export const SURVEY_SITES = [
-    { id: 'lander', name: 'Legado de Pathfinder', x: 25, z: -19, type: 'wreck',
-        note: 'Homenaje a Mars Pathfinder, que aterrizó en Ares Vallis en 1997. La sonda del juego es ficticia.' },
-    { id: 'dunes', name: 'Dunas de Nili Patera', x: 73, z: -37, type: 'station',
-        note: 'Nili Patera tiene campos de dunas que muestran la acción del viento en la superficie de Marte.' },
-    { id: 'canyon', name: 'Estratos de Valles Marineris', x: -69, z: -28, type: 'station',
-        note: 'Valles Marineris es un gran sistema de cañones de Marte. En Candor Chasma se observan terrenos estratificados.' },
-    { id: 'lake', name: 'Antiguo lago de Jezero', x: 25, z: 65, type: 'station',
-        note: 'El cráter Jezero conserva restos de un antiguo lago y un delta. Perseverance estudia sus rocas y sedimentos.' },
-    { id: 'mesas', name: 'Laderas del monte Sharp', x: -61, z: 65, type: 'station',
-        note: 'El monte Sharp se encuentra dentro del cráter Gale. Sus capas sedimentarias registran antiguos ambientes de Marte.' },
-    { id: 'basalt', name: 'Llanura de Elysium', x: 74, z: 25, type: 'station',
-        note: 'Elysium es una gran región volcánica de Marte. Sus volcanes produjeron materiales que cubren parte de Elysium Planitia.' },
-    { id: 'crater', name: 'Borde del cráter Gale', x: 61, z: 83, type: 'station',
-        note: 'Gale es el cráter explorado por Curiosity. En su interior se eleva el monte Sharp, con numerosas capas de sedimentos.' }
-];
-
-export function isSurveyApproach(x, z) {
-    return SURVEY_SITES.some(site => Math.hypot(site.x - x, site.z - z) < 9);
-}
-
-// All visible hardware has a matching fixed collider. Dust and ground details
-// remain decorative; nothing changes the rover's suspension or tire physics.
-export function createMarsExploration({ scene, world, physics, getHeight, size }) {
-    const sites = SURVEY_SITES.map(site => ({ ...site }));
-    const white = new THREE.MeshStandardMaterial({ color: 0xd9d3c7, roughness: 0.8 });
-    const metal = new THREE.MeshStandardMaterial({ color: 0x625d55, roughness: 0.75, metalness: 0.3 });
-    const panel = new THREE.MeshStandardMaterial({ color: 0x343a43, roughness: 0.65, metalness: 0.15 });
-    function hardware(parent, geometry, material, x, y, z) {
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.position.set(x, y, z);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        parent.add(mesh);
-        return mesh;
-    }
-    for (const site of sites) {
-        // Prefer nearby shallow ground, so a goal never requires parking on a cliff.
-        let best = Infinity;
-        const origin = { x: site.x, z: site.z };
-        for (let dx = -6; dx <= 6; dx += 2) for (let dz = -6; dz <= 6; dz += 2) {
-            const x = origin.x + dx, z = origin.z + dz;
-            const slope = Math.hypot(getHeight(x + 1, z) - getHeight(x - 1, z),
-                getHeight(x, z + 1) - getHeight(x, z - 1)) / 2;
-            const score = slope * 8 + Math.hypot(dx, dz) * 0.04;
-            if (score < best) { best = score; site.x = x; site.z = z; }
-        }
-        const group = new THREE.Group();
-        group.position.set(site.x, getHeight(site.x, site.z), site.z);
-        if (site.type === 'wreck') {
-            const body = hardware(group, new THREE.CylinderGeometry(0.85, 1.1, 0.5, 8), white, 0, 0.25, 0);
-            body.rotation.y = 0.3;
-            hardware(group, new THREE.BoxGeometry(1.1, 0.07, 0.65), panel, 1.25, 0.16, 0.2).rotation.z = -0.15;
-            hardware(group, new THREE.CylinderGeometry(0.025, 0.025, 1, 8), metal, 0, 0.9, 0);
-        } else {
-            hardware(group, new THREE.CylinderGeometry(0.26, 0.4, 0.22, 6), metal, 0, 0.11, 0);
-            hardware(group, new THREE.CylinderGeometry(0.035, 0.035, 1.6, 8), white, 0, 0.85, 0);
-            hardware(group, new THREE.BoxGeometry(0.42, 0.2, 0.16), white, 0, 1.55, 0);
-            hardware(group, new THREE.BoxGeometry(0.55, 0.035, 0.36), panel, 0, 1.32, 0).rotation.z = 0.2;
-        }
-        scene.add(group);
-        group.updateMatrixWorld(true);
-        for (const mesh of group.children) {
-            const collider = physics.ColliderDesc.convexHull(new Float32Array(mesh.geometry.attributes.position.array));
-            if (!collider) continue;
-            const position = mesh.getWorldPosition(new THREE.Vector3());
-            collider.setTranslation(position.x, position.y, position.z);
-            collider.setRotation(mesh.getWorldQuaternion(new THREE.Quaternion()));
-            world.createCollider(collider.setFriction(1.5).setRestitution(0));
-        }
-    }
-
-    const storageKey = 'papaya-mars-survey-v1';
-    let visited = new Set();
-    try {
-        const saved = JSON.parse(localStorage.getItem(storageKey) || '[]');
-        if (Array.isArray(saved)) visited = new Set(saved.filter(id => sites.some(site => site.id === id)));
-    } catch { /* Exploration also works when storage is unavailable. */ }
-    let targetIndex = Math.max(0, sites.findIndex(site => !visited.has(site.id)));
-    let scan = 0, elapsed = 0, lastNext = false, message = '', messageTime = 0;
+export function createMarsExploration({ planet }) {
+    const catalog = createExplorationCatalog({ planet });
+    let elapsed = 0;
     const style = document.createElement('style');
     style.textContent = `
-        #mars-survey { position:fixed; right:18px; top:18px; width:244px; box-sizing:border-box;
-            padding:15px; background:rgba(35,27,23,.76); color:#f3e2cf; border:1px solid #d4b29444;
-            border-radius:9px; font:12px/1.5 system-ui,sans-serif; backdrop-filter:blur(8px); z-index:99; }
-        .touch-controls .survey-keyboard-hint { display:none; }
-        #mars-survey small { color:#cfb69c; font-size:10px; letter-spacing:.7px; }
-        #mars-survey strong { display:block; font-size:15px; margin:3px 0; }
+        #planet-orbit-panel #mars-survey { margin-top:10px; padding:10px 0 0; border-top:1px solid #739b9444;
+            font:12px/1.5 system-ui,sans-serif; }
+        #mars-survey small { color:#cfb69c; font-size:10px; }
         #mars-minimap { position:fixed; right:max(18px,env(safe-area-inset-right));
             bottom:max(18px,env(safe-area-inset-bottom)); width:210px; padding:8px;
             box-sizing:border-box; border:1px solid #d4b29466; border-radius:8px;
@@ -138,106 +59,80 @@ export function createMarsExploration({ scene, world, physics, getHeight, size }
         #mars-minimap canvas { display:block; width:100%; height:auto; border-radius:4px; }
         .touch-controls #mars-minimap { width:112px; padding:5px;
             right:max(10px,env(safe-area-inset-right)); bottom:max(10px,env(safe-area-inset-bottom)); }
-        #mars-survey progress { width:100%; height:6px; accent-color:#e1b987; }
-        #mars-survey button { background:#65503f; color:#f3e2cf; border:1px solid #b39373; padding:6px; cursor:pointer; }
-        @media(max-width:600px) { #mars-survey { right:10px; top:10px; width:184px; padding:10px; font-size:11px; }
-            #mars-survey strong { font-size:13px; } }
     `;
     document.head.appendChild(style);
     const hud = document.createElement('aside');
     hud.id = 'mars-survey';
     hud.setAttribute('aria-label', 'Expedición');
-    hud.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-        <small><span data-survey-title>EXPEDICIÓN MARTE</span><span class="survey-summary"> · <span data-count></span></span></small>
-        <button type="button" data-toggle aria-expanded="true" aria-controls="mars-survey-content" aria-label="Minimizar misiones" title="Minimizar misiones">−</button></div>
-        <div id="mars-survey-content">
-        <strong data-region></strong>
-        <small>DESTINO <span class="survey-keyboard-hint">· N para cambiar</span></small><strong data-goal></strong><div data-distance></div>
-        <progress max="1" value="0" aria-label="Progreso del escaneo"></progress><div data-status></div>
-        <button data-reset hidden>Reiniciar expedición</button></div>`;
-    getGameSidebar().appendChild(hud);
-    const ui = name => hud.querySelector(`[data-${name}]`);
-    const toggle = ui('toggle');
-    const content = hud.querySelector('#mars-survey-content');
-    const touchEnabled = () => document.documentElement.classList.contains('touch-controls');
-    function setCollapsed(collapsed) {
-        content.hidden = collapsed;
-        hud.dataset.collapsed = String(collapsed);
-        hud.querySelector('[data-survey-title]').textContent = collapsed ? 'EXPLORACIÓN' : 'EXPEDICIÓN MARTE';
-        toggle.setAttribute('aria-expanded', String(!content.hidden));
-        const label = content.hidden ? 'Mostrar misiones' : 'Minimizar misiones';
-        toggle.setAttribute('aria-label', label);
-        toggle.title = label;
-        toggle.textContent = content.hidden ? '+' : '−';
+    hud.innerHTML = '<small data-count></small>';
+    const countLabel = hud.querySelector('[data-count]');
+    function formatHeading(angle) {
+        const degrees = ((Math.round(THREE.MathUtils.radToDeg(angle)) % 360) + 360) % 360;
+        const cardinal = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'][Math.round(degrees / 45) % 8];
+        return `${degrees}° ${cardinal}`;
     }
-    toggle.addEventListener('click', () => setCollapsed(!content.hidden));
-    setCollapsed(touchEnabled());
-    const countLabel = ui('count'), regionLabel = ui('region'), goalLabel = ui('goal');
-    const distanceLabel = ui('distance'), statusLabel = ui('status');
-    const progress = hud.querySelector('progress');
     // The map is independent of menu collapse, sidebar scrolling and races.
     const minimap = document.createElement('aside');
     minimap.id = 'mars-minimap';
     minimap.setAttribute('aria-label', 'Mapa de Marte');
     minimap.innerHTML = '<canvas width="192" height="192" aria-label="Mapa del terreno: norte arriba, destinos y posición de los rovers"></canvas>';
-    getDrivingPanel().appendChild(minimap);
+    const navigation = document.createElement('dl');
+    navigation.className = 'map-navigation';
+    navigation.setAttribute('aria-label', 'Distancias y rumbos de navegación');
+    navigation.innerHTML = `
+        <div class="map-target"><dt data-map-target-label>Objetivo</dt><dd><strong data-map-target-distance><span class="distance-value">—</span><small class="distance-unit"></small></strong><span data-map-target>—</span></dd></div>
+        <div class="map-home"><dt>Base</dt><dd><strong data-map-base-distance><span class="distance-value">—</span><small class="distance-unit"></small></strong><span data-map-base>—</span></dd></div>`;
+    const bearingsStyle = document.createElement('style');
+    bearingsStyle.textContent = `
+        #rover-driving-panel .map-navigation { grid-column:1 / -1; grid-row:3; display:grid;
+            grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:0;
+            border-top:1px solid #668b8b40; padding-top:7px; font-variant-numeric:tabular-nums; }
+        .map-navigation > div { min-width:0; padding:2px 4px; }
+        .map-navigation > div + div { border-left:1px solid #668b8b40; padding-left:8px; }
+        .map-navigation dt { font-size:8px; letter-spacing:1px; text-transform:uppercase; opacity:.8; }
+        .map-navigation dd { margin:3px 0 0; min-width:0; }
+        .map-navigation strong { display:flex; flex-wrap:wrap; align-items:baseline; gap:0 4px;
+            min-width:0; font-size:16px; font-weight:600; line-height:1.3; }
+        .map-navigation .distance-value { min-width:0; overflow-wrap:anywhere; }
+        .map-navigation .distance-unit { font-size:10px; white-space:nowrap; }
+        .map-navigation dd > span { display:block; margin-top:2px; font-size:10px; }
+        .map-navigation .map-target { color:#ffe08c; }
+        .map-navigation .map-home { color:#9ce9d4; }
+        .touch-controls .map-navigation strong { font-size:14px; }
+        .touch-controls .map-navigation dd > span { font-size:9px; }
+    `;
+    document.head.appendChild(bearingsStyle);
+    const targetLabel = navigation.querySelector('[data-map-target-label]');
+    const targetBearing = navigation.querySelector('[data-map-target]');
+    const targetDistance = navigation.querySelector('[data-map-target-distance]');
+    const baseBearing = navigation.querySelector('[data-map-base]');
+    const baseDistance = navigation.querySelector('[data-map-base-distance]');
+    function setDistance(element, value, unit) {
+        element.querySelector('.distance-value').textContent = value;
+        element.querySelector('.distance-unit').textContent = unit;
+    }
+    function updateMapBearings(position, goal, planetInfo, race) {
+        const destination = race?.gates[Math.min(race.index, race.gates.length - 1)] ?? goal;
+        const navigate = site => planetInfo ? planetInfo.navigate(site) : {
+            distance: Math.hypot(site.x - position.x, site.z - position.z),
+            bearing: Math.atan2(site.x - position.x, position.z - site.z)
+        };
+        const target = navigate(destination), home = navigate({ x: 0, z: 0 });
+        targetLabel.textContent = race ? 'Baliza' : 'Objetivo';
+        setDistance(targetDistance, target.distance < 1000 ? String(Math.round(target.distance)) : (target.distance / 1000).toFixed(2), target.distance < 1000 ? 'm' : 'km');
+        targetBearing.textContent = target.distance < 1 ? 'Aquí' : formatHeading(target.bearing);
+        targetBearing.title = race ? `Baliza ${race.index + 1}` : destination.name;
+        baseBearing.textContent = home.distance < 1 ? 'Aquí' : formatHeading(home.bearing);
+        setDistance(baseDistance, (home.distance / 1000).toFixed(home.distance < 1000 ? 3 : 2), 'km');
+    }
+    getDrivingPanel().append(minimap, navigation);
     const canvas = minimap.querySelector('canvas');
     const ctx = canvas.getContext('2d');
-    const map = document.createElement('canvas');
-    map.width = map.height = 96;
-    const mapCtx = map.getContext('2d');
-    const pixels = mapCtx.createImageData(96, 96);
-    const heights = new Float32Array(96 * 96);
-    for (let j = 0; j < 96; j++) for (let i = 0; i < 96; i++) {
-        heights[j * 96 + i] = getHeight((i / 95 - 0.5) * size, (j / 95 - 0.5) * size);
-    }
-    for (let j = 0; j < 96; j++) for (let i = 0; i < 96; i++) {
-        const offset = j * 96 + i;
-        const h = heights[offset];
-        const r = getMarsRegion((i / 95 - 0.5) * size, (j / 95 - 0.5) * size);
-        const light = THREE.MathUtils.clamp(1 + (h - heights[j * 96 + Math.min(95, i + 1)]) * 0.1 + h * 0.008, 0.55, 1.35);
-        const color = [mix(155, 197, r.lake + r.dunes * 0.3), mix(98, 158, r.lake), mix(67, 113, r.lake)];
-        for (let k = 0; k < 3; k++) pixels.data[offset * 4 + k] = color[k] * light * (1 - r.basalt * 0.35);
-        pixels.data[offset * 4 + 3] = 255;
-    }
-    mapCtx.putImageData(pixels, 0, 0);
-    function drawMap(position, yaw, companion, race) {
-        ctx.drawImage(map, 0, 0, 192, 192);
-        const px = x => (x / size + 0.5) * 192;
-        const goal = sites[targetIndex];
-        ctx.strokeStyle = '#f9deb599'; ctx.setLineDash([3, 4]);
-        ctx.beginPath(); ctx.moveTo(px(position.x), px(position.z));
-        const destination = race ? race.gates[race.index] : goal;
-        if (destination) ctx.lineTo(px(destination.x), px(destination.z));
-        ctx.stroke(); ctx.setLineDash([]);
-        if (race) {
-            ctx.strokeStyle = '#ffda91aa'; ctx.beginPath();
-            race.gates.forEach((gate, index) => {
-                if (index === 0) ctx.moveTo(px(gate.x), px(gate.z)); else ctx.lineTo(px(gate.x), px(gate.z));
-            }); ctx.stroke();
-            race.gates.forEach((gate, index) => {
-                ctx.fillStyle = index === race.index ? '#fff2b9' : '#c49a70';
-                ctx.fillRect(px(gate.x) - 2, px(gate.z) - 2, 4, 4);
-            });
-        }
-        sites.forEach((site, index) => {
-            ctx.fillStyle = visited.has(site.id) ? '#a7c5ab' : '#f1d1a0';
-            ctx.beginPath(); ctx.arc(px(site.x), px(site.z), index === targetIndex ? 4 : 2.5, 0, Math.PI * 2); ctx.fill();
-        });
-        if (companion) {
-            ctx.fillStyle = '#ff6756'; ctx.strokeStyle = '#fff0df'; ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.arc(px(companion.x), px(companion.z), 3, 0, Math.PI * 2);
-            ctx.fill(); ctx.stroke();
-        }
-        ctx.save(); ctx.translate(px(position.x), px(position.z)); ctx.rotate(-yaw);
-        ctx.fillStyle = '#fff8ee'; ctx.strokeStyle = '#44332b'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(0, -6); ctx.lineTo(4, 4); ctx.lineTo(0, 2); ctx.lineTo(-4, 4); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
-        ctx.fillStyle = '#fff3df'; ctx.font = '10px system-ui'; ctx.fillText('N', 8, 13);
-    }
     const planetMap = document.createElement('canvas'); planetMap.width = planetMap.height = 192;
     const planetCtx = planetMap.getContext('2d');
+    const visibleObjectives = new Map();
     let planetMapKey = '';
-    function drawPlanetMap(position, yaw, info, navigation) {
+    function drawPlanetMap(position, yaw, info, exploration, companion, race) {
         const cx = Math.floor(position.x / 50) * 50, cz = Math.floor(position.z / 50) * 50;
         const key = `${info.frame}:${cx}:${cz}`;
         if (key !== planetMapKey) {
@@ -256,79 +151,63 @@ export function createMarsExploration({ scene, world, physics, getHeight, size }
         }
         const x = 96 + (position.x - cx) / 400 * 192;
         const z = 96 + (position.z - cz) / 400 * 192;
-        ctx.strokeStyle = '#fff0c799'; ctx.setLineDash([3, 4]);
-        ctx.beginPath(); ctx.moveTo(x, z); ctx.lineTo(x + Math.sin(navigation.bearing) * 250,
-            z - Math.cos(navigation.bearing) * 250); ctx.stroke(); ctx.setLineDash([]);
-        if (info.life?.target && navigation.distance < 190) {
-            const tx=x+Math.sin(navigation.bearing)*navigation.distance/400*192;
-            const tz=z-Math.cos(navigation.bearing)*navigation.distance/400*192;
-            ctx.fillStyle=info.life.target.visited?'#9ce6c5':'#ffd290';
-            ctx.beginPath();ctx.arc(tx,tz,4,0,Math.PI*2);ctx.fill();
+        const home = info.navigate({ x: 0, z: 0 });
+        const hx = Math.sin(home.bearing), hz = -Math.cos(home.bearing);
+        const homePixels = home.distance / 400 * 192;
+        // Clip the base indicator to the map edge when landing is outside this sector.
+        const edge = Math.min(hx > 0 ? (184 - x) / hx : hx < 0 ? (8 - x) / hx : Infinity,
+            hz > 0 ? (184 - z) / hz : hz < 0 ? (8 - z) / hz : Infinity);
+        const reach = Math.min(homePixels, edge);
+        const bx = x + hx * reach, bz = z + hz * reach;
+        ctx.strokeStyle = '#8fe2cf'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.moveTo(x, z); ctx.lineTo(bx, bz); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = '#9ce9d4'; ctx.fillRect(bx - 3, bz - 3, 6, 6);
+        ctx.font = '9px system-ui'; ctx.fillText('BASE', Math.min(160, Math.max(3, bx - 12)), Math.max(10, bz - 7));
+        visibleObjectives.clear();
+        for (const site of info.visibleObjectives ?? []) visibleObjectives.set(site.id, site);
+        if (exploration.target && !visibleObjectives.has(exploration.target.id)) visibleObjectives.set(exploration.target.id, exploration.target);
+        const sitesOnMap = visibleObjectives.values();
+        for (const site of sitesOnMap) {
+            const nav = info.navigate(site);
+            const tx = x + Math.sin(nav.bearing) * nav.distance / 400 * 192;
+            const tz = z - Math.cos(nav.bearing) * nav.distance / 400 * 192;
+            if (tx < 4 || tx > 188 || tz < 4 || tz > 188) continue;
+            ctx.fillStyle = catalog.isVisited(site.id) ? '#9ce6c5' : '#ffd290';
+            ctx.beginPath(); ctx.arc(tx, tz, 3, 0, Math.PI * 2); ctx.fill();
+            if (site.id === exploration.target?.id) {
+                ctx.strokeStyle = '#ffe08c'; ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.arc(tx, tz, 6, 0, Math.PI * 2); ctx.stroke();
+            }
+        }
+        if (!info.remote) {
+            const projectX = value => x + (value - position.x) / 400 * 192;
+            const projectZ = value => z + (value - position.z) / 400 * 192;
+            if (companion) {
+                ctx.fillStyle = '#ff6756'; ctx.beginPath(); ctx.arc(projectX(companion.x), projectZ(companion.z), 3, 0, Math.PI * 2); ctx.fill();
+            }
+            for (const [index, gate] of (race?.gates ?? []).entries()) {
+                ctx.fillStyle = index === race.index ? '#fff2b9' : '#c49a70';
+                ctx.fillRect(projectX(gate.x) - 2, projectZ(gate.z) - 2, 4, 4);
+            }
         }
         ctx.save(); ctx.translate(x, z); ctx.rotate(-yaw);
         ctx.fillStyle = '#fff5d7'; ctx.beginPath(); ctx.moveTo(0, -7); ctx.lineTo(-4, 5); ctx.lineTo(4, 5); ctx.closePath(); ctx.fill(); ctx.restore();
         ctx.fillStyle = '#fff0d1'; ctx.font = '9px monospace'; ctx.fillText('200 m', 5, 185);
     }
-    const reset = ui('reset');
-    reset.addEventListener('click', () => {
-        visited.clear(); targetIndex = 0; scan = 0; message = ''; messageTime = 0;
-        try { localStorage.removeItem(storageKey); } catch { /* Optional storage. */ }
-    });
+    function refreshPanel() {
+        const info = catalog.info();
+        countLabel.textContent = `${info.registered}/${info.total} objetivos registrados`;
+    }
     return {
-        minimize() { setCollapsed(true); },
+        catalog, panel: hud, refresh: refreshPanel,
         update(delta, position, yaw, speed, keys, companion, race, planetInfo) {
-            if (!position) return;
-            const next = keys.has('KeyN');
-            if (next && !lastNext) { targetIndex = (targetIndex + 1) % sites.length; scan = 0; }
-            lastNext = next;
-            const site = sites[targetIndex];
-            if (planetInfo?.remote) {
-                const life = planetInfo.life, destination = life?.target;
-                scan = 0; progress.value = life?.scan ?? 0;
-                const navigation = planetInfo.navigate(destination ?? site);
-                const { latitude, longitude } = planetInfo.coordinates;
-                countLabel.textContent = `${life?.discoveries ?? 0} hallazgos planetarios`;
-                regionLabel.textContent = (life?.region ?? 'PLANICIES DE MARTE').toUpperCase();
-                goalLabel.textContent = destination ? `${destination.visited ? '✓ ' : ''}${destination.name}` : site.name;
-                const distanceText = navigation.distance < 1000 ? `${Math.round(navigation.distance)} m` : `${(navigation.distance / 1000).toFixed(1)} km`;
-                distanceLabel.textContent = `${distanceText} · rumbo ${Math.round((THREE.MathUtils.radToDeg(navigation.bearing) + 360) % 360)}°`;
-                statusLabel.textContent = destination && destination.distance < 12
-                    ? destination.visited ? 'Lugar registrado en el diario.' : 'Detente a menos de 7 m y mantén E / Escanear para registrar el hallazgo.'
-                    : `${latitude.toFixed(3)}° · ${longitude.toFixed(3)}° · Base a ${(planetInfo.homeDistance / 1000).toFixed(1)} km`;
-                reset.hidden = visited.size !== sites.length;
-                elapsed += delta;
-                if (elapsed >= 0.15) { elapsed = 0; drawPlanetMap(position, yaw, planetInfo, navigation); }
-                return;
-            }
-            const distance = Math.hypot(site.x - position.x, site.z - position.z);
-            const completed = visited.has(site.id);
-            const canScan = distance < 7 && Math.abs(speed) < 0.5 && !completed;
-            scan = canScan && keys.has('KeyE') ? Math.min(1, scan + delta / 2.5) : Math.max(0, scan - delta * 1.5);
-            if (scan >= 1) {
-                visited.add(site.id); message = site.note; messageTime = 9; scan = 0;
-                try { localStorage.setItem(storageKey, JSON.stringify([...visited])); } catch { /* Optional storage. */ }
-                const nextSite = sites.findIndex(s => !visited.has(s.id));
-                if (nextSite >= 0) targetIndex = nextSite;
-            }
-            messageTime = Math.max(0, messageTime - delta);
+            if (!position || !planetInfo) return;
+            document.getElementById('papaya-heading').textContent = `RUMBO ${formatHeading(-yaw)}`;
+            catalog.update(delta, position, speed, keys, race);
+            const info = catalog.info(), goal = info.target;
+            if (goal) updateMapBearings(position, goal, planetInfo, race);
             elapsed += delta;
-            if (elapsed < 0.1) return;
-            elapsed = 0;
-            const goal = sites[targetIndex];
-            const remaining = Math.hypot(goal.x - position.x, goal.z - position.z);
-            const bearing = (Math.atan2(goal.x - position.x, -(goal.z - position.z)) * 180 / Math.PI + 360) % 360;
-            countLabel.textContent = `${visited.size}/${sites.length}`;
-            regionLabel.textContent = getMarsRegion(position.x, position.z).name;
-            goalLabel.textContent = goal.name;
-            distanceLabel.textContent = `${Math.round(remaining)} m · rumbo ${Math.round(bearing)}°`;
-            progress.value = scan;
-            statusLabel.textContent = messageTime > 0 ? message : visited.size === sites.length
-                ? 'Expedición completada. Sigue explorando libremente.' : completed
-                    ? touchEnabled() ? 'Lugar estudiado. Toca Destino para elegir otro.' : 'Lugar estudiado. Pulsa N para elegir otro destino.' : distance < 7
-                        ? Math.abs(speed) >= 0.5 ? 'Detén el rover para investigar.' : touchEnabled() ? 'Mantén Escanear para investigar.' : 'Mantén E para escanear.'
-                        : touchEnabled() ? 'Acércate y mantén Escanear con el rover detenido.' : 'Acércate al punto y mantén E con el rover detenido.';
-            reset.hidden = visited.size !== sites.length;
-            drawMap(position, yaw, companion, race);
+            if (elapsed >= 0.15) { elapsed = 0; drawPlanetMap(position, yaw, planetInfo, info, companion, race); }
         }
     };
 }

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createOrbitalObjectives } from './orbital-objectives.js';
 import { createPlanetGlobeGeometry } from './planet-geometry.js';
 import { mobileGraphics } from './performance.js';
 import { addPlanetSurfaceDetail } from './planet-material.js';
@@ -6,7 +7,8 @@ import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
 
 // A lightweight orbital scene, separate from the local terrain/physics world.
 // A uniform globe and an adaptive close-up patch share the terrain height field.
-export function createPlanetView({ renderer, planet, getPosition, onEnter, onExit, onDescend, renderSurface }) {
+export function createPlanetView({ renderer, planet, getPosition, onEnter, onExit, onDescend, renderSurface, catalog, explorationPanel, refreshExploration, racePanel, refreshRace }) {
+    const objectives = createOrbitalObjectives({ renderer, catalog, mobile: mobileGraphics });
     const scene = new THREE.Scene(); scene.background = new THREE.Color(0x070b12);
     const radius = planet.radius;
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 10, radius * 30);
@@ -19,7 +21,6 @@ export function createPlanetView({ renderer, planet, getPosition, onEnter, onExi
     const surface = new THREE.MeshStandardMaterial({ roughness: 1 });
     addPlanetSurfaceDetail(surface);
     const patchSurface = new THREE.MeshStandardMaterial({roughness:1,transparent:true,depthWrite:true});
-    patchSurface.defines={USE_UV:''};
     addPlanetSurfaceDetail(patchSurface,{patch:true});
     const point = new THREE.Vector3(), normal = new THREE.Vector3();
     const globeGeometry = createPlanetGlobeGeometry(planet, mobileGraphics);
@@ -93,19 +94,17 @@ export function createPlanetView({ renderer, planet, getPosition, onEnter, onExi
     }
     const style = document.createElement('style');
     style.textContent = `
-        #planet-view-toggle { position:fixed; left:14px; top:14px; z-index:120; padding:9px 12px;
+        #planet-view-toggle { position:fixed; right:max(14px,env(safe-area-inset-right)); left:auto; top:max(14px,env(safe-area-inset-top)); z-index:130; padding:0;
             color:#d9eee7; background:#16282de8; border:1px solid #729c9377; border-radius:5px;
-            font:600 11px ui-monospace,monospace; cursor:pointer; touch-action:manipulation; }
-        .touch-controls #planet-view-toggle { top:auto; bottom:calc(max(14px,env(safe-area-inset-bottom)) + 160px); }
-        @media(max-width:600px) and (orientation:portrait) {
-            .touch-controls #planet-view-toggle { bottom:calc(max(14px,env(safe-area-inset-bottom)) + 240px); }
-        }
+            display:grid; place-items:center; width:44px; height:44px; box-sizing:border-box;
+            cursor:pointer; touch-action:manipulation; }
+        #planet-view-toggle svg { display:block; }
         #planet-orbit-reticle { display:none; position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
             width:12px; height:12px; border:1px solid #fff0c799; border-radius:50%; z-index:121; pointer-events:none; }
         body[data-planet-view="true"] #planet-orbit-reticle { display:block; }
         #planet-orbit-panel { position:fixed; left:50%; bottom:max(20px,env(safe-area-inset-bottom)); transform:translateX(-50%);
             z-index:125; width:min(460px,calc(100vw - 28px)); box-sizing:border-box; padding:14px;
-            background:#111e27ed; color:#dcece7; border:1px solid #739b9477; border-radius:8px; font:12px/1.5 ui-monospace,monospace; }
+            background:#111e27ed; color:#dcece7; border:1px solid #739b9477; border-radius:8px; font:12px/1.5 ui-monospace,monospace; max-height:calc(100dvh - 90px); overflow-y:auto; }
         #planet-orbit-panel[hidden] { display:none; }
         #planet-orbit-panel strong { display:block; color:#f0cda1; font-size:14px; }
         #planet-orbit-panel p { margin:6px 0 10px; opacity:.8; }
@@ -113,17 +112,78 @@ export function createPlanetView({ renderer, planet, getPosition, onEnter, onExi
         #planet-orbit-panel button { background:#294348; border:1px solid #7caaa080; border-radius:4px; color:#e1eee7;
             min-height:40px; padding:8px 12px; font:inherit; cursor:pointer; touch-action:manipulation; }
         #planet-orbit-panel button[data-land] { background:#65503b; }
-        body[data-planet-view="true"] #rover-driving-panel, body[data-planet-view="true"] #rover-sidebar,
+        #rover-controls-help { width:min(520px,calc(100vw - 32px)); max-height:calc(100dvh - 48px);
+            box-sizing:border-box; overflow-y:auto; padding:20px; border:1px solid #739b9477;
+            border-radius:10px; background:#111e27; color:#dcece7; font:13px/1.6 ui-monospace,monospace; }
+        #rover-controls-help::backdrop { background:#030a11b8; }
+        #rover-controls-help h2 { margin:0; color:#f0cda1; font-size:18px; }
+        #rover-controls-help h3 { margin:18px 0 6px; color:#f0cda1; font-size:14px; }
+        #rover-controls-help p { margin:6px 0; }
+        #rover-controls-help dl { display:grid; grid-template-columns:auto 1fr; gap:6px 16px; margin:8px 0; }
+        #rover-controls-help dt { color:#f0cda1; font-weight:bold; }
+        #rover-controls-help dd { margin:0; }
+        #rover-controls-help header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+        #planet-orbit-panel .orbit-races { margin-top:10px; border-top:1px solid #739b9444; }
+        #planet-orbit-panel .orbit-races summary { cursor:pointer; padding:10px 0; color:#f0cda1; min-height:24px; }
+        #planet-orbit-panel #beacon-race-panel { position:static; inset:auto; transform:none; width:100%;
+            padding:0; border:0; background:transparent; font:inherit; }
+        #planet-orbit-panel #beacon-race-panel .race-panel-header { display:flex; justify-content:space-between; }
+        #planet-orbit-panel #beacon-race-panel [data-heading] { display:none; }
+        #planet-orbit-panel #beacon-race-panel select { width:100%; min-height:40px; padding:6px; margin:6px 0;
+            background:#263b43; color:#f0e7d3; border:1px solid #74948c77; border-radius:4px; }
+        body[data-planet-view="true"] #rover-driving-panel,
         body[data-planet-view="true"] #rover-touch-controls, body[data-planet-view="true"] #beacon-race-banner { display:none!important; }
     `; document.head.appendChild(style);
     const toggle = document.createElement('button'); toggle.id = 'planet-view-toggle'; toggle.type = 'button';
-    toggle.textContent = 'PLANETA · M'; toggle.setAttribute('aria-pressed', 'false'); document.body.appendChild(toggle);
+    toggle.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>';
+    toggle.setAttribute('aria-label', 'Abrir menú orbital');
+    toggle.setAttribute('aria-controls', 'planet-orbit-panel'); toggle.setAttribute('aria-expanded', 'false');
+    document.body.appendChild(toggle);
     const panel = document.createElement('aside'); panel.id = 'planet-orbit-panel'; panel.hidden = true;
     panel.innerHTML = `<strong>MARTE · VISTA ORBITAL</strong><div data-readout></div>
-        <p>Arrastra para girar. Usa la rueda o +/− para acercarte. El punto central de la vista es tu destino.</p>
+        <div style="font-size:10px"><span style="color:#ffd290">● Pendiente</span> · <span style="color:#9ce6c5">● Registrado</span> · ◉ Elegido</div>
         <div class="orbit-buttons"><button type="button" data-in aria-label="Acercarse al planeta">+</button>
         <button type="button" data-out aria-label="Alejarse del planeta">−</button>
+        <button type="button" data-focus-objective>Centrar objetivo</button>
+        <button type="button" data-home>Ir a Base Papaya</button>
         <button type="button" data-land>Descender aquí</button><button type="button" data-close>Volver al rover</button></div>`;
+    if (explorationPanel) panel.appendChild(explorationPanel);
+    if (racePanel) {
+        const races = document.createElement('details'); races.className = 'orbit-races';
+        const summary = document.createElement('summary'); summary.textContent = 'Carreras';
+        races.append(summary, racePanel); panel.appendChild(races);
+    }
+    const helpButton = document.createElement('button');
+    helpButton.type = 'button'; helpButton.textContent = 'Controles';
+    helpButton.style.marginTop = '10px';
+    helpButton.setAttribute('aria-haspopup', 'dialog');
+    helpButton.setAttribute('aria-controls', 'rover-controls-help');
+    const help = document.createElement('dialog'); help.id = 'rover-controls-help';
+    help.setAttribute('aria-labelledby', 'rover-controls-title');
+    help.innerHTML = `<header><h2 id="rover-controls-title">Cómo jugar</h2>
+        <button type="button" data-dismiss-help aria-label="Cerrar controles" autofocus>✕</button></header>
+        <h3>Teclado</h3><dl>
+        <dt>W / S</dt><dd>Avanzar / retroceder.</dd>
+        <dt>A / D</dt><dd>Girar.</dd>
+        <dt>Espacio</dt><dd>Frenar. En vuelo, estabilizar y detenerse.</dd>
+        <dt>Z</dt><dd>Mantener para despegar o subir.</dd>
+        <dt>F</dt><dd>Dar un impulso de salto.</dd>
+        <dt>X</dt><dd>Mantener para bajar: rápido a gran altura, con frenado automático cerca del suelo.</dd>
+        <dt>G</dt><dd>Mantener para volar más rápido.</dd>
+        <dt>↑ / ↓</dt><dd>En vuelo: bajar / levantar el morro. Al soltar, recuperar suavemente el vuelo horizontal.</dd>
+        <dt>← / →</dt><dd>En vuelo: desplazarse hacia los lados.</dd>
+        <dt>E</dt><dd>Mantener para escanear, detenido junto al objetivo.</dd></dl>
+        <h3>Móvil</h3><p>Joystick izquierdo: avanzar, retroceder y girar. En vuelo, el derecho controla el morro y el desplazamiento lateral. Al soltarlo, el rover recupera suavemente el vuelo horizontal.</p>
+        <p>Mantén los botones para frenar, subir, bajar o escanear. Toca «Impulso» para dar un salto y «Rápido» para activar o desactivar la velocidad rápida en vuelo.</p>
+        <h3>Explorar</h3><p>Abre ☰ y toca un punto del planeta para elegir un objetivo. Usa «Centrar objetivo» y «Descender aquí» para acercarte. Ya en tierra, sigue el minimapa y detente junto al objetivo para escanearlo.</p>
+        <p>Arrastra el planeta para girarlo y usa + / − para acercarte o alejarte. «Ir a Base Papaya» te devuelve a la base.</p>
+        <h3>Carreras</h3><p>Abre «Carreras» en el menú, elige una prueba y sigue las balizas en orden.</p>`;
+    panel.append(helpButton, help);
+    helpButton.addEventListener('click', () => help.showModal());
+    help.querySelector('[data-dismiss-help]').addEventListener('click', () => help.close());
+    // Escape dismisses the popup without also closing the orbital menu.
+    help.addEventListener('keydown', event => event.stopPropagation());
+    help.addEventListener('close', () => { if (!panel.hidden) helpButton.focus(); });
     document.body.appendChild(panel);
     const reticle = document.createElement('div'); reticle.id = 'planet-orbit-reticle';
     reticle.setAttribute('aria-hidden', 'true'); document.body.appendChild(reticle);
@@ -164,17 +224,22 @@ export function createPlanetView({ renderer, planet, getPosition, onEnter, onExi
     }
 
     let active = false, altitude = radius * 1.8, targetAltitude = altitude;
+    let landingError = '';
     function close() {
         if (!active) return;
-        active = false; panel.hidden = true;
+        if (help.open) help.close();
+        active = false; panel.hidden = true; objectives.hide();
         controls?.dispose(); controls = null;
         renderer.domElement.style.touchAction = 'none';
         releaseTargets(); surfaceBlend = 0;
-        document.body.dataset.planetView = 'false'; toggle.setAttribute('aria-pressed', 'false');
-        toggle.textContent = 'PLANETA · M'; onExit?.();
+        document.body.dataset.planetView = 'false'; toggle.setAttribute('aria-expanded', 'false');
+        toggle.setAttribute('aria-label', 'Abrir menú orbital');
+        if (panel.contains(document.activeElement)) toggle.focus();
+        onExit?.();
     }
     function open() {
         const position = getPosition(); if (!position || active) return;
+        landingError = '';
         active = true; surfaceBlend = 0; altitude = targetAltitude = radius * 1.8;
         normal.copy(position).normalize();
         // Choose a nonparallel orbit axis at the poles, keeping the current
@@ -190,24 +255,40 @@ export function createPlanetView({ renderer, planet, getPosition, onEnter, onExi
         controls.rotateSpeed = dragSensitivity(); controls.update();
         marker.position.copy(position).normalize().multiplyScalar(radius * 1.008);
         patchDirection.set(0, 0, 0);
-        panel.hidden = false; document.body.dataset.planetView = 'true';
-        toggle.setAttribute('aria-pressed', 'true'); toggle.textContent = 'VOLVER · M'; onEnter?.();
+        panel.hidden = false; objectives.show(); document.body.dataset.planetView = 'true';
+        toggle.setAttribute('aria-expanded', 'true'); toggle.setAttribute('aria-label', 'Cerrar menú orbital'); onEnter?.();
     }
-    function zoom(factor) { targetAltitude = THREE.MathUtils.clamp(targetAltitude * factor, 8, radius * 6); }
+    function zoom(factor) { landingError = ''; targetAltitude = THREE.MathUtils.clamp(targetAltitude * factor, 8, radius * 6); }
     toggle.addEventListener('click', () => active ? close() : open());
     panel.querySelector('[data-close]').addEventListener('click', close);
     panel.querySelector('[data-in]').addEventListener('click', () => zoom(0.5));
     panel.querySelector('[data-out]').addEventListener('click', () => zoom(2));
-    panel.querySelector('[data-land]').addEventListener('click', () => {
-        const destination = camera.position.clone().normalize();
-        onDescend(destination); close();
+    panel.querySelector('[data-focus-objective]').addEventListener('click', () => {
+        const target = catalog.info().target;
+        if (!target) return;
+        landingError = '';
+        normal.copy(target.position).normalize();
+        camera.position.copy(normal).multiplyScalar(radius + planet.elevation(normal) + altitude);
+        camera.up.addScaledVector(normal, -camera.up.dot(normal));
+        if (camera.up.lengthSq() < 0.001) camera.up.set(Math.abs(normal.y) > 0.95 ? 1 : 0, Math.abs(normal.y) > 0.95 ? 0 : 1, 0);
+        camera.up.normalize(); camera.lookAt(controls.target); controls.update();
     });
+    function descend(destination) {
+        if (onDescend(destination) === false) {
+            landingError = 'No hay espacio libre para aterrizar. Elige otro punto.';
+            readout.textContent = landingError;
+            return;
+        }
+        close();
+    }
+    panel.querySelector('[data-land]').addEventListener('click', () => descend(camera.position.clone().normalize()));
+    panel.querySelector('[data-home]').addEventListener('click', () => descend(new THREE.Vector3(0, 1, 0)));
     renderer.domElement.addEventListener('wheel', event => {
         if (!active) return;
         event.preventDefault(); zoom(Math.exp(THREE.MathUtils.clamp(event.deltaY * 0.002, -0.7, 0.7)));
     }, { passive: false });
     return {
-        get active() { return active; }, toggle() { active ? close() : open(); },
+        get active() { return active; }, close, toggle() { active ? close() : open(); },
         resize(width, height) {
             camera.aspect = width / height; camera.updateProjectionMatrix(); controls?.handleResize();
         },
@@ -250,12 +331,14 @@ export function createPlanetView({ renderer, planet, getPosition, onEnter, onExi
                 }
             }
 
+            refreshExploration?.(); refreshRace?.();
             const heightLabel = altitude < 1000 ? `${Math.round(altitude)} m` : `${(altitude / 1000).toFixed(1)} km`;
-            readout.textContent = `${heightLabel} de altura · ${lat.toFixed(2)}° · ${lon.toFixed(2)}°${detailed ? surfaceBlend > 0.998 ? ' · TERRENO REAL' : ` · DETALLE ${Math.round(surfaceBlend * 100)}%` : ''}`;
+            readout.textContent = landingError || `${heightLabel} de altura · ${lat.toFixed(2)}° · ${lon.toFixed(2)}°${detailed ? surfaceBlend > 0.998 ? ' · TERRENO REAL' : ` · DETALLE ${Math.round(surfaceBlend * 100)}%` : ''}`;
             if (!detailed) {
                 if (surfaceBlend <= 0.002) releaseTargets();
                 renderer.render(scene, camera);
             }
+            objectives.render(camera);
         }
     };
 }

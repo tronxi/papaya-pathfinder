@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { getGameSidebar } from './ui.js';
 
 // Routes follow the current terrain through regional passes and avoid research stations.
 export const RACE_COURSES = [
@@ -186,29 +185,18 @@ export function createBeaconRace({ scene, world, physics, getHeight, getPlayer, 
     document.head.appendChild(style);
     const hud = document.createElement('section'); hud.id = 'beacon-race-panel';
     hud.setAttribute('aria-label', 'Carrera entre balizas');
-    hud.innerHTML = `<header class="race-panel-header"><strong data-heading>CARRERA CONTRA EL ROJO</strong><span data-time>0:00.0</span><button type="button" data-toggle-panel aria-label="Minimizar carreras" aria-expanded="true" aria-controls="race-panel-content">−</button></header><div id="race-panel-content">
+    hud.innerHTML = `<header class="race-panel-header"><strong data-heading>CARRERAS</strong><span data-time>0:00.0</span></header><div id="race-panel-content">
         <select aria-label="Circuito">${RACE_COURSES.map((course, index) => `<option value="${index}">${course.name} · ${Math.round(course.distance)} m</option>`).join('')}</select>
         <p data-status>Te lleva a la salida. Cruza las balizas en orden.</p>
         <div><button type="button" data-start disabled>Correr</button> <button type="button" data-cancel hidden>Abandonar</button>
         <button type="button" data-close hidden>Seguir explorando</button>
         <small data-best></small></div></div>`;
-    getGameSidebar().appendChild(hud);
     const banner = document.createElement('div'); banner.id = 'beacon-race-banner';
     banner.setAttribute('aria-live', 'polite'); document.body.appendChild(banner);
     const status = hud.querySelector('[data-status]'), timer = hud.querySelector('[data-time]');
     const select = hud.querySelector('select'), startButton = hud.querySelector('[data-start]');
     const cancelButton = hud.querySelector('[data-cancel]'), bestLabel = hud.querySelector('[data-best]');
     const closeButton = hud.querySelector('[data-close]'), heading = hud.querySelector('[data-heading]');
-    let collapsed = false;
-    const content = hud.querySelector('#race-panel-content'), panelToggle = hud.querySelector('[data-toggle-panel]');
-    function setCollapsed(value) {
-        collapsed = value; content.hidden = value; hud.dataset.collapsed = String(value);
-        panelToggle.textContent = value ? '+' : '−';
-        panelToggle.setAttribute('aria-expanded', String(!value));
-        panelToggle.setAttribute('aria-label', value ? 'Expandir carreras' : 'Minimizar carreras');
-        show();
-    }
-    panelToggle.addEventListener('click', () => setCollapsed(!collapsed));
     function active() { return state === 'countdown' || state === 'running'; }
     function paintGates() {
         gateMeshes.forEach((gate, index) => gate.material.color.setHex(index < playerGate ? 0x8a9c83 : index === playerGate ? 0xffd37f : 0x9d785b));
@@ -216,8 +204,7 @@ export function createBeaconRace({ scene, world, physics, getHeight, getPlayer, 
     function show() {
         const live = active(); hud.dataset.active = String(live);
         hud.dataset.result = String(state === 'results');
-        heading.textContent = collapsed ? live ? `BALIZA ${Math.min(playerGate + 1, gates.length)}/${gates.length}` : 'CARRERAS'
-            : state === 'results' ? 'CARRERA TERMINADA' : 'CARRERA CONTRA EL ROJO';
+        heading.textContent = state === 'results' ? 'CARRERA TERMINADA' : 'CARRERAS';
         select.hidden = live; select.disabled = live;
         startButton.disabled = live || !getPlayer() || !getOpponent();
         startButton.hidden = live; startButton.textContent = state === 'results' ? 'Repetir' : 'Correr';
@@ -227,7 +214,7 @@ export function createBeaconRace({ scene, world, physics, getHeight, getPlayer, 
         const record = best[RACE_COURSES[selected].id];
         bestLabel.textContent = record ? `Récord ${formatTime(record)}` : '';
         status.textContent = state === 'countdown' ? 'Preparados… acelera cuando termine la cuenta atrás.' : state === 'running'
-            ? `Baliza ${Math.min(playerGate + 1, gates.length)}/${gates.length} · Rojo ${opponentGate}/${gates.length}${opponentTime !== null ? ' · El rojo ha terminado' : ''}`
+            ? `Baliza ${Math.min(playerGate + 1, gates.length)}/${gates.length} · Rival ${opponentGate}/${gates.length}${opponentTime !== null ? ' · El rival ha terminado' : ''}`
             : state === 'results' ? result : `${gates.length} balizas · ${Math.round(RACE_COURSES[selected].distance)} m · límite ${formatTime(RACE_COURSES[selected].timeLimit)}. Correr te lleva a la salida.`;
         banner.dataset.result = String(state === 'results' && finishBannerTime > 0);
         banner.textContent = state === 'results' && finishBannerTime > 0 ? '¡CARRERA TERMINADA!'
@@ -298,7 +285,7 @@ export function createBeaconRace({ scene, world, physics, getHeight, getPlayer, 
     });
     show();
     return {
-        minimize() { setCollapsed(true); },
+        panel: hud, refresh: show,
         syncWorldState() { setCourseActive(active()); },
         cancel() {
             state = 'idle'; elapsed = 0; finishBannerTime = 0;
@@ -329,7 +316,7 @@ export function createBeaconRace({ scene, world, physics, getHeight, getPlayer, 
                     if (playerGate === gates.length) {
                         const time = elapsed + delta * playerHit;
                         elapsed = time;
-                        finish(`${opponentTime === null || time <= opponentTime ? '¡Ganaste!' : 'Ganó el rojo'} · ${formatTime(time)}`, time);
+                        finish(`${opponentTime === null || time <= opponentTime ? '¡Ganaste!' : 'Ganó el rival'} · ${formatTime(time)}`, time);
                     }
                 }
                 if (state === 'running') {

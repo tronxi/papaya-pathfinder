@@ -5,10 +5,11 @@
     user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
 }
 html.touch-controls #rover-touch-controls:not([hidden]) {display:block}
+#rover-touch-controls [hidden] {display:none!important}
 #rover-touch-controls button,#rover-touch-controls .touch-stick {pointer-events:auto;touch-action:none;-webkit-tap-highlight-color:transparent}
 #rover-touch-controls button {color:inherit;font:inherit;cursor:pointer}
 #rover-touch-controls button:focus-visible {outline:2px solid #ffe0aa;outline-offset:4px}
-#rover-touch-controls svg {width:24px;height:24px;flex:none}
+#rover-touch-controls svg {width:25px;height:25px;flex:none}
 #rover-touch-controls .touch-stick {
     position:absolute;left:max(18px,env(safe-area-inset-left));bottom:max(18px,env(safe-area-inset-bottom));
     width:144px;height:144px;border:1px solid var(--touch-edge);border-radius:50%;
@@ -25,67 +26,73 @@ html.touch-controls #rover-touch-controls:not([hidden]) {display:block}
 }
 #rover-touch-controls .touch-stick.is-active {border-color:#e5b17a99}
 #rover-touch-controls .touch-stick.is-active .touch-stick-knob {background:radial-gradient(circle at 35% 25%,#cfac7da6,#69503bcc);border-color:#f4d2a6}
-#rover-touch-controls .touch-stick-label {position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);white-space:nowrap;color:#c9d9ce9c;font-size:8px;letter-spacing:1px;pointer-events:none}
-#rover-touch-controls .touch-stick-aim {display:none;left:auto;right:max(18px,env(safe-area-inset-right));width:112px;height:112px}
-#rover-touch-controls[data-flight="true"] .touch-stick-aim {display:block}
-#rover-touch-controls .touch-action {
+#rover-touch-controls .touch-stick-label {position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);white-space:nowrap;color:#c9d9ce9c;font-size:9px;letter-spacing:1px;pointer-events:none}
+#rover-touch-controls .touch-actions {
     position:absolute;right:max(18px,env(safe-area-inset-right));bottom:max(18px,env(safe-area-inset-bottom));
-    width:62px;height:62px;border:1px solid var(--touch-edge);border-radius:50%;
-    background:linear-gradient(145deg,#294348cb,#122126b3);box-shadow:0 4px 12px #0003,inset 0 1px #d4e6d91a;
-    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:4px;
+    display:grid;grid-template-columns:repeat(2,70px);grid-template-rows:repeat(2,70px);gap:10px;
 }
-#rover-touch-controls .touch-action span {font-size:8px;letter-spacing:.3px;text-transform:uppercase}
+#rover-touch-controls .touch-action {
+    box-sizing:border-box;width:100%;height:100%;border:1px solid var(--touch-edge);border-radius:18px;
+    background:linear-gradient(145deg,#294348e8,#122126cf);box-shadow:0 4px 12px #0003,inset 0 1px #d4e6d91a;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:5px;
+}
+#rover-touch-controls .touch-action span {font-size:9px;letter-spacing:.3px;text-transform:uppercase}
 #rover-touch-controls .touch-action[aria-pressed="true"] {background:#805b36e0;border-color:#ffdb9b;box-shadow:0 0 16px #dfb27835,inset 0 1px #ffe1aa66}
-#rover-touch-controls .touch-brake {width:76px;height:76px;border:2px solid #e5b17aa0;background:#392d27bf;color:#ffe0b6}
-#rover-touch-controls .touch-brake svg {width:30px;height:30px}
-#rover-touch-controls .touch-hop {right:calc(max(18px,env(safe-area-inset-right)) + 88px);bottom:calc(max(18px,env(safe-area-inset-bottom)) + 76px)}
-#rover-touch-controls .touch-up {right:calc(max(18px,env(safe-area-inset-right)) + 62px);bottom:calc(max(18px,env(safe-area-inset-bottom)) + 144px);width:50px;height:50px}
-#rover-touch-controls .touch-scan {right:calc(max(18px,env(safe-area-inset-right)) + 90px)}
-#rover-touch-controls .touch-down,#rover-touch-controls .touch-boost {display:none}
-#rover-touch-controls[data-flight="true"] .touch-brake {right:calc(max(18px,env(safe-area-inset-right)) + 126px);width:60px;height:60px}
-#rover-touch-controls[data-flight="true"] .touch-up,#rover-touch-controls[data-flight="true"] .touch-down {width:50px;height:50px;bottom:calc(max(18px,env(safe-area-inset-bottom)) + 144px)}
-#rover-touch-controls[data-flight="true"] .touch-up {right:calc(max(18px,env(safe-area-inset-right)) + 62px)}
-#rover-touch-controls[data-flight="true"] .touch-down {display:flex}
-#rover-touch-controls[data-flight="true"] .touch-boost {display:flex;right:calc(max(18px,env(safe-area-inset-right)) + 128px);bottom:calc(max(18px,env(safe-area-inset-bottom)) + 78px);width:56px;height:56px}
-#rover-touch-controls[data-flight="true"] .touch-hop,#rover-touch-controls[data-flight="true"] .touch-scan {display:none}
-#rover-touch-controls .touch-mode {position:absolute;left:50%;top:max(12px,env(safe-area-inset-top));transform:translateX(-50%);display:flex;align-items:center;gap:7px;padding:8px 12px;border:1px solid #88ac9d38;border-radius:20px;background:#142329b3;font-size:8px;letter-spacing:1px;white-space:nowrap;pointer-events:none}
-#rover-touch-controls .touch-mode i {width:5px;height:5px;background:#9ed2b7;border-radius:50%}
-#rover-touch-controls[data-flight="true"] .touch-mode i {background:var(--touch-accent)}
-#rover-touch-controls .touch-utility-toggle {position:absolute;left:max(14px,env(safe-area-inset-left));top:max(12px,env(safe-area-inset-top));width:44px;height:44px;display:grid;place-items:center;border:1px solid var(--touch-edge);border-radius:12px;background:#17292ec9}
-#rover-touch-controls .touch-utilities {pointer-events:auto;position:absolute;left:max(14px,env(safe-area-inset-left));top:64px;width:190px;padding:12px;border:1px solid var(--touch-edge);border-radius:12px;background:#142329ee}
-#rover-touch-controls .touch-utilities[hidden] {display:none}
-#rover-touch-controls .touch-utilities .touch-action {position:relative;inset:auto;width:100%;height:44px;border-radius:8px;flex-direction:row;gap:10px}
-#rover-touch-controls .touch-utilities p {font:11px/1.5 system-ui;color:#a7bdb4;margin:12px 0 0}
-html.touch-controls #rover-driving-panel {bottom:calc(max(18px,env(safe-area-inset-bottom)) + 198px);right:max(14px,env(safe-area-inset-right));width:150px;grid-template-columns:84px minmax(0,1fr);gap:5px;padding:6px;pointer-events:none}
-html.touch-controls #rover-driving-panel .mission-console-header,html.touch-controls #rover-driving-panel #papaya-hop {display:none}
-html.touch-controls #rover-driving-panel #mars-minimap,html.touch-controls #rover-driving-panel #papaya-hud {grid-row:1}
-html.touch-controls #rover-driving-panel #papaya-hud {gap:2px}
+#rover-touch-controls .touch-up {grid-column:2;grid-row:1}
+#rover-touch-controls .touch-down {grid-column:1;grid-row:1}
+#rover-touch-controls .touch-scan,#rover-touch-controls .touch-boost {grid-column:1;grid-row:2}
+#rover-touch-controls .touch-brake {grid-column:2;grid-row:2;border:2px solid #e5b17aa0;background:#392d27e0;color:#ffe0b6}
+#rover-touch-controls .touch-brake svg {width:29px;height:29px}
+#rover-touch-controls .touch-hop {position:absolute;right:0;bottom:calc(100% + 10px);width:58px;height:58px}
+#rover-touch-controls .touch-scan {color:#bde9d2;border-color:#9cdbc080}
+html.touch-controls #rover-driving-panel {
+    top:max(12px,env(safe-area-inset-top));left:max(12px,env(safe-area-inset-left));right:auto;bottom:auto;
+    width:202px;grid-template-columns:110px minmax(0,1fr);gap:6px;padding:7px;pointer-events:none;
+}
+html.touch-controls #rover-driving-panel .mission-console-header {display:flex;letter-spacing:.4px}
+html.touch-controls #rover-driving-panel #mars-minimap,html.touch-controls #rover-driving-panel #papaya-hud {grid-row:2}
+html.touch-controls #rover-driving-panel #papaya-hud {gap:3px}
 html.touch-controls #rover-driving-panel #papaya-speed {font-size:18px}
 html.touch-controls #rover-driving-panel .telemetry-stat {flex-direction:column;gap:0;align-items:flex-start}
 html.touch-controls #rover-driving-panel .telemetry-reading {font-size:9px}
-html.touch-controls #mars-survey {right:max(12px,env(safe-area-inset-right));top:max(12px,env(safe-area-inset-top));max-height:calc(100dvh - 340px);overflow:auto}
-html.touch-controls #mars-survey button,html.touch-controls #beacon-race button {min-height:44px;touch-action:manipulation}
-@media(max-height:480px) {
-    #rover-touch-controls .touch-stick {width:128px;height:128px;bottom:max(12px,env(safe-area-inset-bottom))}
-    #rover-touch-controls .touch-stick-aim {width:104px;height:104px}
-    html.touch-controls #rover-driving-panel {bottom:calc(max(12px,env(safe-area-inset-bottom)) + 210px);width:140px;grid-template-columns:76px minmax(0,1fr)}
-    html.touch-controls #rover-driving-panel .telemetry-stat {display:none}
-}
+html.touch-controls #beacon-race-panel button {min-height:44px}
 @media(max-width:380px) {
-    #rover-touch-controls .touch-stick-drive {width:126px;height:126px;left:12px}
-    #rover-touch-controls .touch-stick-aim {width:100px;height:100px;right:12px}
-    #rover-touch-controls[data-flight="true"] .touch-brake {right:122px}
-    #rover-touch-controls[data-flight="true"] .touch-boost {right:124px}
+    #rover-touch-controls .touch-stick {width:120px;height:120px;left:max(12px,env(safe-area-inset-left))}
+    #rover-touch-controls .touch-actions {grid-template-columns:repeat(2,58px);grid-template-rows:repeat(2,58px);right:max(12px,env(safe-area-inset-right))}
+    #rover-touch-controls .touch-action span {font-size:8px}
+    html.touch-controls #rover-driving-panel {width:180px;grid-template-columns:94px minmax(0,1fr)}
+}
+@media(max-height:480px) and (min-width:500px) {
+    #rover-touch-controls .touch-stick {width:112px;height:112px;bottom:max(12px,env(safe-area-inset-bottom))}
+    #rover-touch-controls .touch-actions {grid-template-columns:repeat(2,58px);grid-template-rows:repeat(2,58px);bottom:max(12px,env(safe-area-inset-bottom))}
+    html.touch-controls #rover-driving-panel {width:160px;grid-template-columns:76px minmax(0,1fr)}
 }
 @media(prefers-reduced-motion:no-preference) {
     #rover-touch-controls .touch-action {transition:background .12s,border-color .12s}
 }
 
-html.touch-controls #rover-sidebar {top:64px;right:max(12px,env(safe-area-inset-right));width:min(326px,calc(100vw - 24px));max-height:calc(100dvh - 360px);gap:6px}
-html.touch-controls #rover-sidebar #mars-survey {inset:auto;max-height:none;overflow:visible}
-html.touch-controls #beacon-race-panel button {min-height:44px}
-html.touch-controls #planet-view-toggle {top:auto;bottom:calc(max(18px,env(safe-area-inset-bottom)) + 166px)}
-@media(max-height:480px) and (min-width:600px) {
-    html.touch-controls #rover-driving-panel {bottom:max(12px,env(safe-area-inset-bottom));right:calc(max(18px,env(safe-area-inset-right)) + 204px)}
-    html.touch-controls #rover-sidebar {max-height:calc(100dvh - 270px)}
+#rover-touch-controls .touch-stick.touch-stick-aim {
+    left:auto;right:max(18px,env(safe-area-inset-right));width:112px;height:112px;
+}
+#rover-touch-controls .touch-stick-aim .touch-stick-label {font-size:8px;letter-spacing:.4px}
+#rover-touch-controls .touch-actions {
+    bottom:calc(max(18px,env(safe-area-inset-bottom)) + 146px);
+    grid-template-columns:repeat(2,58px);grid-template-rows:repeat(2,58px);
+}
+@media(max-width:380px) {
+    #rover-touch-controls .touch-stick.touch-stick-aim {right:max(12px,env(safe-area-inset-right));width:104px;height:104px}
+    #rover-touch-controls .touch-actions {bottom:calc(max(18px,env(safe-area-inset-bottom)) + 138px);grid-template-columns:repeat(2,52px);grid-template-rows:repeat(2,52px)}
+    #rover-touch-controls .touch-hop {width:52px;height:52px}
+}
+@media(max-height:480px) and (min-width:500px) {
+    #rover-touch-controls .touch-stick.touch-stick-aim {width:104px;height:104px}
+    #rover-touch-controls .touch-actions {
+        right:calc(max(18px,env(safe-area-inset-right)) + 130px);bottom:max(12px,env(safe-area-inset-bottom));
+        grid-template-columns:repeat(4,48px);grid-template-rows:48px;gap:8px;
+    }
+    #rover-touch-controls .touch-down {grid-column:1;grid-row:1}
+    #rover-touch-controls .touch-up {grid-column:2;grid-row:1}
+    #rover-touch-controls .touch-boost,#rover-touch-controls .touch-scan {grid-column:3;grid-row:1}
+    #rover-touch-controls .touch-brake {grid-column:4;grid-row:1}
+    #rover-touch-controls .touch-hop {width:48px;height:48px;bottom:calc(100% + 8px)}
 }

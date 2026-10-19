@@ -1,3 +1,4 @@
+import { createLandingBase, isLandingBaseArea } from './landing-base.js';
 
 import * as THREE from 'three';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
@@ -16,7 +17,7 @@ import { stepDrive } from './driving.js';
 import { createTouchControls } from './touch-controls.js';
 import { createAutonomousRover } from './autonomous-rover.js';
 import { createBeaconRace, isRaceCorridor } from './beacon-race.js';
-import { getMarsRegion, shapeMarsTerrain, isSurveyApproach, createMarsExploration } from './mars-world.js';
+import { getMarsRegion, shapeMarsTerrain, createMarsExploration } from './mars-world.js';
 import { createRockerBogieSolver, createWheelSupportSampler } from './suspension.js';
 import { addSky, addMarsSurfaceDetail, createMarsGroundTextures, createMarsRockTextures, createRoverMaterials, createWheelEffects, createWheelThrusterEffects } from './visuals.js';
 
@@ -36,7 +37,7 @@ const CONFIG = {
     HOP_SPEED: 6,
     CONTINUOUS_LIFT_ACCELERATION: 90,
     FLIGHT_ASCENT_SPEED: 2500,
-    FLIGHT_DESCENT_SPEED: 1800,
+    FLIGHT_DESCENT_SPEED: 20000,
     AIR_THRUST_ACCELERATION: 11,
     AIR_BOOST_ACCELERATION: 60,
     AIR_FORWARD_BOOST_ACCELERATION: 1800,
@@ -191,7 +192,7 @@ const CYLINDER_ROTATION = new THREE.Quaternion()
 const scene = new THREE.Scene();
 
 scene.background = new THREE.Color(0xddb596);
-scene.fog = new THREE.FogExp2(0xddb596, 0.007);
+scene.fog = new THREE.FogExp2(0xddb596, 0.004);
 const sky = addSky(scene);
 
 const camera = new THREE.PerspectiveCamera(
@@ -221,7 +222,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.3;
 
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 
 document.body.appendChild(renderer.domElement);
 const graphics = createGraphics(renderer, scene, camera);
@@ -242,6 +243,16 @@ const controls = new OrbitControls(
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 controls.enablePan = false;
+const cameraTouchMedia = window.matchMedia('(pointer: coarse)');
+function updateCameraSensitivity() {
+    // Normalize touch rotation against the longer screen dimension so turning
+    // the phone sideways does not suddenly amplify the same finger movement.
+    controls.rotateSpeed = cameraTouchMedia.matches
+        ? 0.65 * window.innerHeight / Math.max(window.innerWidth, window.innerHeight) : 1;
+}
+cameraTouchMedia.addEventListener('change', updateCameraSensitivity);
+window.addEventListener('resize', updateCameraSensitivity);
+updateCameraSensitivity();
 
 controls.minDistance = 3;
 controls.maxDistance = 45;
@@ -294,6 +305,8 @@ function getCameraMinimumHeight(position) {
 }
 
 function updateCameraControls(delta) {
+    // Less touch inertia, with the same decay at different frame rates.
+    controls.dampingFactor = 1 - Math.pow(1 - (cameraTouchMedia.matches ? 0.14 : 0.05), delta * 60);
     controls.update(delta);
     const minimumHeight = getCameraMinimumHeight(cameraOrbit.position);
     if (Number.isFinite(minimumHeight)) {
@@ -948,7 +961,7 @@ for (let i = 0; i < CONFIG.ROCK_COUNT; i++) {
 
     if (
         Math.hypot(x, z) <
-        CONFIG.ROCK_SPAWN_CLEARANCE || isSurveyApproach(x, z) || isRaceCorridor(x, z)
+        CONFIG.ROCK_SPAWN_CLEARANCE || isLandingBaseArea(x, z) || isRaceCorridor(x, z)
     ) {
         continue;
     }
@@ -1868,6 +1881,7 @@ function placePlayerOnGrid(position, yaw) {
 // -----------------------------------------------------------------------------
 
 window.addEventListener('keydown', event => {
+    if (event.target instanceof Element && event.target.closest('#planet-orbit-panel') && event.code !== 'Escape') return;
     if (event.code === 'KeyM' || (event.code === 'Escape' && planetView?.active)) {
         event.preventDefault();
         if (!event.repeat) planetView?.toggle();
@@ -1936,7 +1950,7 @@ function updateRover(delta) {
     const continuousLift = input.has('KeyZ');
     if (((continuousLift && !descendKey) || ((flightKey || descendKey) &&
         (hopAirborne || groundContact <= 0))) && !beaconRace?.movementLocked) {
-        if (!poweredFlight) { flightRadialSpeed = 0; flightPitch = 0; }
+        if (!poweredFlight) { flightRadialSpeed = 0; flightPitch = currentPitch; }
         poweredFlight = true; hopAirborne = true; suspensionTracking = false; groundContact = 0;
     }
     if (launch && !beaconRace?.movementLocked) {
@@ -1950,27 +1964,71 @@ function updateRover(delta) {
     }
     if (poweredFlight) {
         const previousRadialSpeed = flightRadialSpeed;
-        // Flight attitude is persistent; neutral input holds the selected heading.
+        // Use the lowest tire, not the chassis center: on slopes the uphill
+        // wheels reach the terrain well before the center does.
+        rover.updateMatrixWorld(true);
+        let tireClearance = Infinity;
+        for (const wheel of wheelAssemblies) {
+            wheel.steeringPivot.getWorldPosition(wheelWorldPosition);
+            tireClearance = Math.min(tireClearance, wheelWorldPosition.y - wheel.radius -
+                getTerrainHeight(wheelWorldPosition.x, wheelWorldPosition.z));
+        }
+        const terrainBlend = 1 - THREE.MathUtils.smoothstep(tireClearance, 0.25, 5);
+        // Releasing pitch input gently returns to the horizon on every device.
         // Positive local X pitch raises the nose (the rover faces local -Z).
         const pitchInput = controlAxis('pitch', 'ArrowDown', 'ArrowUp');
         const stabilizing = input.has('Space') || descendKey;
-        if (stabilizing) flightPitch *= Math.exp(-3 * delta);
+        if (stabilizing) flightPitch *= Math.exp(-3 * delta * (1 - terrainBlend));
+        else if (Math.abs(pitchInput) < 0.001) {
+            flightPitch *= Math.exp(-1.8 * delta * (1 - terrainBlend));
+        }
         else flightPitch = THREE.MathUtils.clamp(flightPitch + pitchInput * 0.85 * delta,
             -THREE.MathUtils.degToRad(85), THREE.MathUtils.degToRad(85));
         // Reframing transports the rendered attitude; retain the pilot's pitch
         // relative to the new local horizon instead of accumulating curvature.
-        currentPitch = flightPitch;
+        let targetPitch = flightPitch;
         const bank = stabilizing ? 0 : THREE.MathUtils.clamp(-driveState.yawRate * 0.22, -0.3, 0.3);
-        currentRoll += (bank - currentRoll) * (1 - Math.exp(-3 * delta));
+        let targetRoll = THREE.MathUtils.lerp(bank, currentRoll, terrainBlend);
+        if (descendKey && terrainBlend > 0) {
+            const { x, z } = rover.position;
+            const slopeX = (getTerrainHeight(x + 1, z) - getTerrainHeight(x - 1, z)) / 2;
+            const slopeZ = (getTerrainHeight(x, z + 1) - getTerrainHeight(x, z - 1)) / 2;
+            const sin = Math.sin(roverYaw), cos = Math.cos(roverYaw);
+            const slopePitch = THREE.MathUtils.clamp(Math.atan(-slopeX * sin - slopeZ * cos),
+                -CONFIG.SUSPENSION_PITCH_LIMIT, CONFIG.SUSPENSION_PITCH_LIMIT);
+            const slopeRoll = THREE.MathUtils.clamp(Math.atan(slopeX * cos - slopeZ * sin),
+                -CONFIG.SUSPENSION_ROLL_LIMIT, CONFIG.SUSPENSION_ROLL_LIMIT);
+            targetPitch = THREE.MathUtils.lerp(flightPitch, slopePitch, terrainBlend);
+            targetRoll = THREE.MathUtils.lerp(bank, slopeRoll, terrainBlend);
+        }
+        currentPitch += (targetPitch - currentPitch) * (1 - Math.exp(-5 * delta));
+        currentRoll += (targetRoll - currentRoll) * (1 - Math.exp(-5 * delta));
+        if (terrainBlend > 0) {
+            // Attitude changes also move the tires. Keep their previous gap
+            // while rotating so the uphill side cannot cut into the slope.
+            applyRoverOrientation();
+            rover.updateMatrixWorld(true);
+            let rotatedClearance = Infinity;
+            for (const wheel of wheelAssemblies) {
+                wheel.steeringPivot.getWorldPosition(wheelWorldPosition);
+                rotatedClearance = Math.min(rotatedClearance, wheelWorldPosition.y - wheel.radius -
+                    getTerrainHeight(wheelWorldPosition.x, wheelWorldPosition.z));
+            }
+            rover.position.y += Math.max(0, tireClearance - rotatedClearance);
+        }
         const altitude = planet.coordinates(rover.position).altitude;
         const clearance = Math.max(0, rover.position.y - getTerrainHeight(rover.position.x, rover.position.z));
         const forwardInput = controlAxis('throttle', 'KeyW', 'KeyS');
-        const diving = !stabilizing && forwardInput !== 0 && Math.abs(currentPitch) > 0.005;
+        const diving = !continuousLift && !stabilizing && forwardInput !== 0 && Math.abs(currentPitch) > 0.005;
         if (!input.has('Space') && (continuousLift || descendKey || diving)) {
             const ascent = THREE.MathUtils.lerp(60, CONFIG.FLIGHT_ASCENT_SPEED,
                 THREE.MathUtils.smoothstep(clearance, 100, 5000));
+            // Fast orbital descent, then progressively softer approach. The
+            // curve's gradient stays below the braking response, so the motor
+            // can track the decreasing speed instead of arriving too fast.
+            const landingGap = Math.max(0, tireClearance - 0.5);
             const descent = Math.min(CONFIG.FLIGHT_DESCENT_SPEED,
-                Math.max(1, Math.sqrt(2 * CONFIG.CONTINUOUS_LIFT_ACCELERATION * Math.max(0, clearance - 1))));
+                0.5 + landingGap * 0.7 + landingGap * landingGap * 0.00015);
             // Match the vertical component to the inclined flight path. The
             // horizontal motor uses cos(pitch), so near-vertical flight remains bounded.
             const pathSpeed = Math.max(Math.abs(driveState.speed), Math.abs(forwardInput) * 3);
@@ -1978,8 +2036,10 @@ function updateRover(delta) {
             const desired = descendKey ? -descent : diving
                 ? THREE.MathUtils.clamp(pathVertical, -Math.min(6000, descent), 6000) : ascent;
             const slowing = flightRadialSpeed * desired < 0 || Math.abs(flightRadialSpeed) > Math.abs(desired);
-            const flightAcceleration = diving ? (flightKey ? CONFIG.AIR_FORWARD_BOOST_ACCELERATION :
-                CONFIG.AIR_THRUST_ACCELERATION) : CONFIG.CONTINUOUS_LIFT_ACCELERATION;
+            const flightAcceleration = descendKey
+                ? Math.max(CONFIG.CONTINUOUS_LIFT_ACCELERATION, descent * 2)
+                : diving ? (flightKey ? CONFIG.AIR_FORWARD_BOOST_ACCELERATION :
+                    CONFIG.AIR_THRUST_ACCELERATION) : CONFIG.CONTINUOUS_LIFT_ACCELERATION;
             const acceleration = slowing ? Math.max(flightAcceleration,
                 Math.abs(flightRadialSpeed) * CONFIG.AIR_BRAKING_RESPONSE) : flightAcceleration;
             flightRadialSpeed += THREE.MathUtils.clamp(desired - flightRadialSpeed, -acceleration * delta, acceleration * delta);
@@ -2177,7 +2237,9 @@ function moveAirborneWithCollisions(displacement, delta) {
     if (!impact) { rover.position.copy(flightDestination); return; }
     const fraction = THREE.MathUtils.clamp(impact.time_of_impact - 0.002 / Math.max(0.001, flightSweep.length()), 0, 1);
     rover.position.addScaledVector(flightSweep, fraction);
-    const landing = impact.normal1.y > 0.25;
+    // An uphill wheel touching during takeoff must not switch off the engines.
+    const ascending = poweredFlight && flightRadialSpeed > 0;
+    const landing = !ascending && verticalVelocity <= 0 && impact.normal1.y > 0.25;
     // Inelastic impact: flight energy is dissipated, never converted into a
     // suspension launch. The ground motor takes over at a driveable speed.
     const groundLimit = beaconRace?.racing ? CONFIG.RACE_MAX_SPEED : CONFIG.MAX_SPEED;
@@ -2188,8 +2250,8 @@ function moveAirborneWithCollisions(displacement, delta) {
     driveState.airAcceleration = 0;
     driveState.airStrafe = 0;
     currentSpeed = driveState.speed;
-    verticalVelocity = 0;
-    flightHoldAltitude = null;
+    verticalVelocity = ascending ? verticalVelocity : 0;
+    if (!ascending) flightHoldAltitude = null;
     if (landing) { poweredFlight = false; flightRadialSpeed = 0; flightVerticalThrust = 0; }
     hopAirborne = !landing;
     groundContact = landing ? 1 : 0;
@@ -2470,22 +2532,12 @@ function createDrivingHUD() {
         <div class="telemetry-stat"><span class="telemetry-label">ALT</span><span class="telemetry-reading" id="papaya-altitude">0.0 m</span></div>
     `;
 
-    const hopButton = document.createElement('button');
-    hopButton.type = 'button';
-    hopButton.id = 'papaya-hop';
-    hopButton.title = 'Propulsores de las ruedas · F · según la inclinación';
-    hopButton.setAttribute('aria-label', 'Activar propulsores de las ruedas');
-    hopButton.innerHTML = '<span data-hop-label>IMPULSO</span><span class="telemetry-key">F</span>';
-    hopButton.addEventListener('click', () => { hopRequested = true; });
-    hud.appendChild(hopButton);
     getDrivingPanel().appendChild(hud);
 
     hudElements = {
         speed: document.getElementById('papaya-speed'),
         slope: document.getElementById('papaya-slope'),
         altitude: document.getElementById('papaya-altitude'),
-        hop: hopButton,
-        hopLabel: hopButton.querySelector('[data-hop-label]'),
         mode: document.getElementById('papaya-drive-mode'),
         panel: getDrivingPanel(),
     };
@@ -2501,8 +2553,6 @@ function updateDrivingHUD(delta) {
     }
 
     hudElapsed = 0;
-    hudElements.hop.disabled = !!beaconRace?.movementLocked;
-    hudElements.hopLabel.textContent = 'IMPULSO';
 
     const speedKmh = Math.abs(currentSpeed) * 3.6;
     const mode = groundContact <= 0 ? 'airborne' : input.has('Space') ? 'braking' : speedKmh > 0.5 ? 'moving' : 'idle';
@@ -2534,19 +2584,21 @@ function updateDrivingHUD(delta) {
 createDrivingHUD();
 
 // Cosmetic feedback runs once per rendered frame, independently of the fixed physics.
-const exploration = createMarsExploration({
-    scene: homeland, world, physics: RAPIER, getHeight: planet.heightAtHome, size: CONFIG.TERRAIN_SIZE
-});
+createLandingBase({ scene: homeland, world, physics: RAPIER, getHeight: planet.heightAtHome });
+const exploration = createMarsExploration({ planet });
 const wheelEffects = createWheelEffects(scene, camera, renderer, getPhysicalGroundHeight);
 const wheelThrusterEffects = createWheelThrusterEffects(scene);
 beaconRace = createBeaconRace({
     scene: homeland, world, physics: RAPIER, getHeight: planet.heightAtHome,
-    beforeStart: returnToLandingFrame,
+    beforeStart() {
+        // Restore the paused world before staging the race, so closing the
+        // orbital view cannot restore old velocities over the starting grid.
+        planetView?.close();
+        returnToLandingFrame();
+    },
     getPlayer: () => rover, getOpponent: () => autonomousRover,
-    placePlayer: placePlayerOnGrid, onStart: () => exploration.minimize()
+    placePlayer: placePlayerOnGrid
 });
-
-if (touchControls.enabled) { exploration.minimize(); beaconRace.minimize?.(); }
 
 // The original area stays resident as a small authored region, but its meshes
 // and colliders sleep when travelling elsewhere. Only streamed tiles surround
@@ -2642,7 +2694,7 @@ function getPlanetNavigation() {
     const homeDistance = planet.homeDistance(rover.position);
     return { remote: !planet.homeFrame || Math.max(Math.abs(rover.position.x), Math.abs(rover.position.z)) > 190,
         homeDistance, coordinates: planet.coordinates(rover.position), frame: planetFrameVersion,
-        tiles: planetStreamer.count, getHeight: getTerrainHeight, life: planetLife.info(),
+        tiles: planetStreamer.count, getHeight: getTerrainHeight, visibleObjectives: planetLife.info().destinations,
         navigate(site) {
             const from = planet.toGlobal(rover.position).normalize();
             const to = site.position?.isVector3 ? site.position.clone().normalize() :
@@ -2663,7 +2715,7 @@ let orbitalPlayerState = null;
 let orbitalRelocated = false;
 const normalFogDensity = scene.fog.density;
 const planetLife = createPlanetLife({ planet, scene, world, physics: RAPIER, rockShapes,
-    rockMaterial: rockGroups[0].material, mobile: mobileGraphics });
+    rockMaterial: rockGroups[0].material, catalog: exploration.catalog, terrain: planetStreamer, mobile: mobileGraphics });
 const planetFlight = createPlanetFlight({ scene, planet, sky, camera, orbitCamera: cameraOrbit, homeland, mobile: mobileGraphics, hasContactTerrain: () => planetStreamer.groundReady });
 
 function finishOrbitalView() {
@@ -2684,7 +2736,7 @@ function finishOrbitalView() {
     }
     orbitalPlayerState = null;
     scene.fog.density = normalFogDensity;
-    controls.enabled = true; keys.clear(); touchControls.reset?.(); physicsAccumulator = 0; clock.getDelta();
+    controls.enabled = true; keys.clear(); touchControls.reset?.(); physicsAccumulator = 0; timer.reset();
 }
 function renderOrbitalSurface(globalCamera, normal, globalUp, altitude, prepareOnly = false) {
     if (!rover) return false;
@@ -2726,18 +2778,77 @@ function renderOrbitalSurface(globalCamera, normal, globalUp, altitude, prepareO
     return true;
 }
 function descendFromOrbit(normal) {
-    if (!rover) return;
-    orbitalRelocated = true;
+    if (!rover) return false;
+    const previousPosition = planet.toGlobal(rover.position);
     planet.toLocal(normal.clone().multiplyScalar(planet.radius), rover.position);
     changePlanetFrame(planet.homeDistance(rover.position) < 550);
+    const destination = rover.position.clone();
     planetStreamer.resume();
-    planetStreamer.update(rover.position, true, false);
+    planetStreamer.update(destination, true, false);
+    planetLife.prepareLanding(destination);
     world.step();
-    placePlayerOnGrid({ x: rover.position.x, z: rover.position.z }, 0);
+
+    // Check the complete rover footprint, including wheels, against the actual
+    // equipment and rocks before allowing suspension placement to settle it.
+    const bounds = new THREE.Box3();
+    for (const wheel of wheelAssemblies) {
+        const extent = new THREE.Vector3(wheel.halfWidth, wheel.radius, wheel.radius);
+        bounds.expandByPoint(wheel.wheelCenter.clone().sub(extent));
+        bounds.expandByPoint(wheel.wheelCenter.clone().add(extent));
+    }
+    if (chassisCollision) {
+        const extent = chassisCollision.shape.halfExtents;
+        const half = new THREE.Vector3(extent.x, extent.y, extent.z);
+        bounds.expandByPoint(chassisCollision.center.clone().sub(half));
+        bounds.expandByPoint(chassisCollision.center.clone().add(half));
+    }
+    bounds.expandByScalar(0.25);
+    const half = bounds.getSize(new THREE.Vector3()).multiplyScalar(0.5);
+    const center = bounds.getCenter(new THREE.Vector3());
+    const facing = new THREE.Quaternion(), boxCenter = new THREE.Vector3();
+    let landing = null;
+    for (const radius of [0, 4.8, 5.5, 6.2, 8, 12, 18, 24]) {
+        const count = radius === 0 ? 1 : 24;
+        for (let i = 0; i < count; i++) {
+            const angle = i / count * Math.PI * 2;
+            const x = destination.x + Math.cos(angle) * radius;
+            const z = destination.z + Math.sin(angle) * radius;
+            const yaw = radius ? Math.atan2(x - destination.x, z - destination.z) : 0;
+            facing.setFromAxisAngle(UP, yaw);
+            let low = Infinity, high = -Infinity;
+            for (const dx of [-half.x, 0, half.x]) for (const dz of [-half.z, 0, half.z]) {
+                boxCenter.set(center.x + dx, 0, center.z + dz).applyQuaternion(facing);
+                const height = getTerrainHeight(x + boxCenter.x, z + boxCenter.z);
+                low = Math.min(low, height); high = Math.max(high, height);
+            }
+            if (high - low > 0.65) continue;
+            if (planet.homeFrame && autonomousRover &&
+                Math.hypot(x - autonomousRover.root.position.x, z - autonomousRover.root.position.z) < 3) continue;
+            const shape = new RAPIER.Cuboid(half.x, half.y + (high - low) * 0.5, half.z);
+            boxCenter.copy(center).applyQuaternion(facing);
+            boxCenter.x += x; boxCenter.z += z;
+            boxCenter.y = (low + high) * 0.5 + half.y + 0.03;
+            const obstruction = world.intersectionWithShape(boxCenter, facing, shape,
+                RAPIER.QueryFilterFlags.ONLY_FIXED, undefined, undefined, groundBody,
+                collider => !planetStreamer.ownsCollider(collider.handle));
+            if (!obstruction) { landing = { x, z, yaw }; break; }
+        }
+        if (landing) break;
+    }
+    if (!landing) {
+        planet.toLocal(previousPosition, rover.position);
+        synchronizeWheelColliders(true);
+        return false;
+    }
+    orbitalRelocated = true;
     beaconRace.cancel();
+    placePlayerOnGrid(landing, landing.yaw);
     wheelEffects.reset();
+    return true;
 }
-planetView = createPlanetView({ renderer, planet,
+planetView = createPlanetView({ renderer, planet, catalog: exploration.catalog,
+    explorationPanel: exploration.panel, refreshExploration: () => exploration.refresh(),
+    racePanel: beaconRace.panel, refreshRace: () => beaconRace.refresh(),
     getPosition: () => rover ? planet.toGlobal(rover.position) : null,
     onEnter() {
         orbitalRelocated = false;
@@ -2787,7 +2898,9 @@ function updateRoverVisuals(delta) {
 // ANIMATION
 // -----------------------------------------------------------------------------
 
-const clock = new THREE.Clock();
+const timer = new THREE.Timer();
+timer.connect(document);
+timer.reset();
 let physicsAccumulator = 0;
 world.timestep = CONFIG.PHYSICS_STEP;
 // Populate scene queries before the FBX's initial ground placement.
@@ -2798,14 +2911,14 @@ const activityKeys = ['KeyW', 'KeyS', 'KeyA', 'KeyD', 'KeyF', 'KeyG', 'KeyZ', 'K
 document.addEventListener('visibilitychange', () => {
     physicsAccumulator = 0;
     lastFrameTimestamp = null;
-    clock.getDelta();
+    timer.reset();
 });
 
 function animate(timestamp = performance.now()) {
     if (document.hidden) {
         physicsAccumulator = 0;
         lastFrameTimestamp = null;
-        clock.getDelta();
+        timer.reset();
         return;
     }
     const active = planetView?.active || cameraDragging || cameraManualDelay > 0 || beaconRace?.racing ||
@@ -2817,14 +2930,15 @@ function animate(timestamp = performance.now()) {
         if (elapsed < interval - 0.5) return;
         lastFrameTimestamp = timestamp - (Math.max(0, elapsed - interval) % interval);
     } else lastFrameTimestamp = timestamp;
-    const delta = Math.min(clock.getDelta(), CONFIG.MAX_FRAME_TIME);
+    timer.update(timestamp);
+    const delta = Math.min(timer.getDelta(), CONFIG.MAX_FRAME_TIME);
     if (planetView?.active) {
         physicsAccumulator = 0;
         planetView.render(delta);
         return;
     }
     updatePlanetStreaming();
-    planetLife.update(delta, rover, currentSpeed, input);
+    planetLife.update(delta, rover, currentSpeed);
     physicsAccumulator += delta;
     while (physicsAccumulator >= CONFIG.PHYSICS_STEP) {
         updateRover(CONFIG.PHYSICS_STEP);
@@ -2839,9 +2953,10 @@ function animate(timestamp = performance.now()) {
     updateFollowCamera(delta);
     updateRoverVisuals(delta);
     if (rover) planetFlight.update(rover, delta);
-    touchControls.update?.({ airborne: poweredFlight || groundContact <= 0, powered: poweredFlight, delta });
     updateDrivingHUD(delta);
     exploration.update(delta, rover?.position, roverYaw, currentSpeed, input, autonomousRover?.root.position, beaconRace.mapState, getPlanetNavigation());
+    touchControls.update({ airborne: poweredFlight || groundContact <= 0, powered: poweredFlight, delta,
+        scanAvailable: !!rover && !beaconRace.mapState && exploration.catalog.canScan(rover.position, currentSpeed) });
 
     graphics.render(delta, !poweredFlight || planetFlight.altitude < 60);
 }

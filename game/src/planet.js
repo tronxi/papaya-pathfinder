@@ -272,6 +272,7 @@ export function createPlanetStreamer({ planet, scene, world, physics, groundBody
     }
     return {
         reset,
+        bindDetails: underlay.bindDetails,
         reframe(matrix) {
             // Keep the old visible surface during a floating-origin change.
             // Only collision is replaced immediately; visuals leave gradually.
@@ -336,7 +337,7 @@ export function createPlanetStreamer({ planet, scene, world, physics, groundBody
             const deadline = performance.now() + (mobile ? 3 : 5);
             let count = 0;
             while (pending.length && count < (mobile ? 3 : 6) && performance.now() < deadline) { buildNext(); count++; }
-            groundReady=hasContactSurface();underlay.update(position,groundReady);
+            groundReady=hasContactSurface();underlay.update(position,groundReady,tiles,planet.homeFrame);
         },
         get groundReady() { return groundReady; },
         ownsCollider(handle) { return [...tiles.values()].some(tile => tile.collider?.handle === handle); },

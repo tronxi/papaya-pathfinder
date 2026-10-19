@@ -3,7 +3,7 @@ import { createSurfaceTransition } from './surface-transition.js';
 
 // Cube-face cells give every rock and outpost a permanent planetary address.
 // Their coordinates survive unloading, frame transport, poles and the date line.
-export function createPlanetLife({ planet, scene, world, physics, rockShapes, rockMaterial, mobile = false }) {
+export function createPlanetLife({ planet, scene, world, physics, rockShapes, rockMaterial, catalog, terrain, mobile = false }) {
     const cells = new Map(), size = 256, radius = planet.radius;
     const colliderHandles = new Set();
     const root = new THREE.Group(); root.name = 'planet-expedition-sectors';
@@ -13,13 +13,10 @@ export function createPlanetLife({ planet, scene, world, physics, rockShapes, ro
     const predicted = new THREE.Vector3(), flightDirection = new THREE.Vector3();
     const matrix = new THREE.Matrix4(), rotation = new THREE.Quaternion(), spin = new THREE.Quaternion();
     const scale = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
-    const visited = new Set();
-    try { for (const id of JSON.parse(localStorage.getItem('papaya-planet-discoveries-v1') || '[]')) if (typeof id === 'string') visited.add(id); } catch { /* Optional storage. */ }
     const white = new THREE.MeshStandardMaterial({color:0xdad3c3,roughness:.85});
     const dark = new THREE.MeshStandardMaterial({color:0x333a43,roughness:.7,metalness:.25});
     const hardwareShapes = [new THREE.CylinderGeometry(.65,.9,.5,8),new THREE.BoxGeometry(2,.06,1),
-        new THREE.CylinderGeometry(.045,.045,2.6,6),new THREE.BoxGeometry(.5,.3,.3)];
-    let scan = 0, target = null, lastNext = false, focusedId = null;
+        new THREE.CylinderGeometry(.045,.045,2.6,6),new THREE.BoxGeometry(.5,.3,.3),new THREE.SphereGeometry(1,12,8,0,Math.PI*2,0,Math.PI/2),new THREE.BoxGeometry(1.4,1,1)];
     function randomGenerator(face, x, z) {
         let seed = (Math.imul(face + 1, 73856093) ^ Math.imul(x, 19349663) ^ Math.imul(z, 83492791)) >>> 0;
         return () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
@@ -45,10 +42,11 @@ export function createPlanetLife({ planet, scene, world, physics, rockShapes, ro
             const mesh = new THREE.InstancedMesh(shape, rockMaterial, count);mesh.count = 0;
             mesh.castShadow = true;mesh.receiveShadow = true;group.add(mesh);return mesh;
         });
+        const site = catalog.cellSite(face, x, z);
         for (let i=0;i<count;i++) {
             const position = surfacePosition(face,(x+random())*size,(z+random())*size,new THREE.Vector3());
             if (planet.homeDistance(planet.toLocal(position,local)) < 340) continue;
-            if (position.distanceTo(center) < 6) continue;
+            if (site && position.distanceTo(site.position) < 6) continue;
             normal.copy(position).normalize();
             const height = .12 + Math.pow(random(),3)*1.3;
             const angle = random()*Math.PI*2;
@@ -61,26 +59,25 @@ export function createPlanetLife({ planet, scene, world, physics, rockShapes, ro
             objects.push({position,rotation:rotation.clone(),scale:scale.clone(),shape:rockShapes[variant]});
         }
         for(const mesh of meshes) {mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();}
-        let site = null;
-        // A regular sparse schedule guarantees destinations without a global list.
-        if (((x % 3 + 3) % 3) === 1 && ((z % 3 + 3) % 3) === 1 &&
-            planet.homeDistance(planet.toLocal(center,local)) > 450) {
-            const id=`${face}:${x}:${z}`, type=Math.floor(random()*3);
-            site={id,position:center.clone(),name:['Sonda abandonada','Estación geológica','Baliza de expedición'][type],region:region.name};
-            normal.copy(center).normalize();rotation.setFromUnitVectors(up,normal);
-            const station=new THREE.Group();station.position.copy(center);station.quaternion.copy(rotation);group.add(station);
+        if (site) {
+            const { type } = site;
+            normal.copy(site.position).normalize();rotation.setFromUnitVectors(up,normal);
+            const station=new THREE.Group();station.position.copy(site.position);station.quaternion.copy(rotation);group.add(station);
             const parts = type === 0 ? [[0,0,.25,0],[1,1.1,.3,0],[1,-1.1,.3,0],[2,0,1.6,0]]
                 : type === 1 ? [[0,0,.25,0],[1,1.1,.6,0],[2,0,1.6,0],[3,0,2.8,0],[3,.7,.4,.7],[3,-.7,.4,-.7]]
-                : [[0,0,.25,0],[2,0,1.6,0],[3,0,2.8,0]];
+                : type === 2 ? [[0,0,.25,0],[2,0,1.6,0],[3,0,2.8,0]]
+                : type === 3 ? [[0,0,.25,0],[4,0,.45,0],[2,1.4,1.6,0],[3,1.4,2.8,0]]
+                : [[5,-.8,.5,0],[5,.8,.5,0],[5,0,1.5,0],[2,1.8,1.6,0],[1,0,2.1,0]];
             for(const [shape,x,y,z]of parts) {
                 const geometry=hardwareShapes[shape],mesh=new THREE.Mesh(geometry,shape===1?dark:white);
                 mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;station.add(mesh);
-                const position=new THREE.Vector3(x,y,z).applyQuaternion(rotation).add(center);
+                const position=new THREE.Vector3(x,y,z).applyQuaternion(rotation).add(site.position);
                 objects.push({position,rotation:rotation.clone(),scale:new THREE.Vector3(1,1,1),shape:geometry});
             }
         }
         const fade=createSurfaceTransition(group,'lifeCoverage');fade(0);
         const fadeMaterials=new Set();group.traverse(mesh=>{if(mesh.isMesh)fadeMaterials.add(mesh.material);});
+        for (const material of fadeMaterials) terrain?.bindDetails(material);
         return {group,center,objects,colliders,site,fade,fadeMaterials,coverage:0};
     }
     function clearCollisions(cell) {
@@ -111,7 +108,32 @@ export function createPlanetLife({ planet, scene, world, physics, rockShapes, ro
         }
     }
     return {
-        update(delta, rover, speed, input) {
+        prepareLanding(position) {
+            planet.toGlobal(position, global); normal.copy(global).normalize();
+            planet.surfaceMatrix(rockMaterial.userData.marsFrame);
+            planet.globalToLocalMatrix(frame);
+            if (!frame.equals(previousFrame)) for (const cell of cells.values()) clearCollisions(cell);
+            previousFrame.copy(frame); root.matrix.copy(frame); root.matrixWorldNeedsUpdate = true;
+            // Build the landing footprint before searching for free space; the
+            // normal per-frame streaming budget must not hide an obstacle here.
+            for (let face = 0; face < 6; face++) {
+                const axis = face < 2 ? normal.x : face < 4 ? normal.y : normal.z;
+                if (axis * (face % 2 ? -1 : 1) < 0.5) continue;
+                const divisor = Math.abs(axis);
+                const u = (face < 2 ? normal.y : normal.x) / divisor * radius;
+                const v = (face < 4 ? normal.z : normal.y) / divisor * radius;
+                for (let z = Math.floor((v - 50) / size); z <= Math.floor((v + 50) / size); z++) {
+                    for (let x = Math.floor((u - 50) / size); x <= Math.floor((u + 50) / size); x++) {
+                        const id = `${face}:${x}:${z}`;
+                        if (!cells.has(id)) cells.set(id, build(face, x, z));
+                        const cell = cells.get(id);
+                        collisions(cell, true, false);
+                        cell.coverage = 1; cell.fade(1); cell.group.visible = true;
+                    }
+                }
+            }
+        },
+        update(delta, rover, speed) {
             if(!rover)return;
             planet.toGlobal(rover.position,global);normal.copy(global).normalize();
             const clearance=global.length()-radius-planet.elevation(normal);
@@ -154,35 +176,20 @@ export function createPlanetLife({ planet, scene, world, physics, rockShapes, ro
             while(pending.length&&built<(mobile?1:3)&&performance.now()<deadline) {
                 const [id,key]=pending.shift();cells.set(id,build(key.face,key.x,key.z));built++;
             }
-            const candidates=[];
             for(const [id,cell]of cells) {
                 const distance=cell.center.distanceTo(global);
                 const desired=wanted.has(id)?(1-THREE.MathUtils.smoothstep(distance,mobile?450:650,mobile?1000:1400))*(1-THREE.MathUtils.smoothstep(clearance,900,2100)):0;
                 cell.coverage+=(desired-cell.coverage)*(1-Math.exp(-3*delta));cell.fade(cell.coverage);cell.group.visible=cell.coverage>.005;
                 collisions(cell,wanted.has(id)&&clearance<70&&distance<400,changed);
                 if(!wanted.has(id)&&cell.coverage<.005){remove(id,cell);continue;}
-                if(cell.site)candidates.push({...cell.site,distance:cell.site.position.distanceTo(global),visited:visited.has(cell.site.id)});
             }
-            candidates.sort((a,b)=>a.distance-b.distance);
-            const next=input.has('KeyN');
-            if(next&&!lastNext&&candidates.length) {
-                const index=candidates.findIndex(site=>site.id===(focusedId??target?.id));
-                focusedId=candidates[(index+1)%candidates.length].id;
-            }
-            lastNext=next;
-            const selected=candidates.find(site=>site.id===focusedId);
-            target=selected??candidates[0]??null;
-            if(!selected)focusedId=null;
-            normal.copy(global).normalize();
-            if(target&&!target.visited&&target.distance<7&&Math.abs(speed)<.5&&input.has('KeyE'))scan=Math.min(1,scan+delta/2.5);else scan=0;
-            if(scan>=1){visited.add(target.id);target.visited=true;scan=0;try{localStorage.setItem('papaya-planet-discoveries-v1',JSON.stringify([...visited]));}catch{/* Optional storage. */}}
         },
         preview(position) {
             // The inspection view streams scenery without moving the player
             // or triggering discoveries and input actions.
-            this.update(1/60,{position,quaternion:new THREE.Quaternion()},0,{has:()=>false});
+            this.update(1/60,{position,quaternion:new THREE.Quaternion()},0);
         },
-        info() {return {region:planet.surface(normal).region.name,target,scan,discoveries:visited.size,sectors:cells.size};},
+        info() {return {region:planet.surface(normal).region.name,sectors:cells.size, destinations:[...cells.values()].filter(cell=>cell.site).map(cell=>cell.site)};},
         ownsCollider(handle) {return colliderHandles.has(handle);}
     };
 }

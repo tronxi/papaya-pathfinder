@@ -23,8 +23,6 @@ export function createPlanetFlight({ scene, planet, sky, camera, orbitCamera, ho
     surfaceDetail(material);
     const patchMaterial = new THREE.MeshStandardMaterial({ roughness: 1, transparent: true,
         fog: false, depthWrite: false });
-    // Enable UV varying for the soft perimeter without allocating a texture.
-    patchMaterial.defines = { USE_UV: '' };
     surfaceDetail(patchMaterial, true);
     const patch = new THREE.Mesh(new THREE.BufferGeometry(), patchMaterial);
     patch.name = 'flight-intermediate-surface'; patch.matrixAutoUpdate = false;

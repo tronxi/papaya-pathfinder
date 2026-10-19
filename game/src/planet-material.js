@@ -10,10 +10,11 @@ surfaceFocus = {value:new THREE.Vector3()}, contactRadius = {value:0}} = {}) {
     surface.onBeforeCompile = shader => {
         shader.uniforms.flightSurfaceFocus = surfaceFocus;
         shader.uniforms.flightContactRadius = contactRadius;
-        shader.vertexShader = 'varying vec3 flightSurface;\n' + shader.vertexShader;
+        const patchVarying = patch ? 'varying vec2 flightPatchUv;\n' : '';
+        shader.vertexShader = 'varying vec3 flightSurface;\n' + patchVarying + shader.vertexShader;
         shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>',
-            '#include <begin_vertex>\nflightSurface = position;');
-        shader.fragmentShader = `varying vec3 flightSurface;
+            `#include <begin_vertex>\nflightSurface = position;${patch ? '\nflightPatchUv = uv;' : ''}`);
+        shader.fragmentShader = `${patchVarying}varying vec3 flightSurface;
             uniform vec3 flightSurfaceFocus;
             uniform float flightContactRadius;
             float flightNoise(vec3 p) {
@@ -47,8 +48,8 @@ surfaceFocus = {value:new THREE.Vector3()}, contactRadius = {value:0}} = {}) {
             float sedimentWeight = 1.0 - smoothstep(24.0, 100.0, length(fwidth(p)));
             float sediment = (flightNoise(p / 48.0) - 0.5) * sedimentWeight;
             diffuseColor.rgb *= sandColor * (0.80 + broad * 0.25 + medium * 0.16 + sediment * 0.14 + grain * 0.12);
-            ${patch ? 'diffuseColor.a *= 1.0 - smoothstep(0.72, 1.0, max(abs(vUv.x * 2.0 - 1.0), abs(vUv.y * 2.0 - 1.0)));' : ''}
+            ${patch ? 'diffuseColor.a *= 1.0 - smoothstep(0.72, 1.0, max(abs(flightPatchUv.x * 2.0 - 1.0), abs(flightPatchUv.y * 2.0 - 1.0)));' : ''}
         `);
     };
-    surface.customProgramCacheKey = () => `flight-surface-${patch}`;
+    surface.customProgramCacheKey = () => `flight-surface-patch-uv-v2-${patch}`;
 }
