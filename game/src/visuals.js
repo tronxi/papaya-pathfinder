@@ -45,7 +45,11 @@ export function addMarsSurfaceDetail(material, rocky = false, rockTextures = nul
     material.userData.marsFrame = new THREE.Matrix4();
     material.onBeforeCompile = shader => {
         shader.uniforms.marsFrame = { value: material.userData.marsFrame };
-        shader.vertexShader = 'uniform mat4 marsFrame;\nvarying vec3 marsPosition;\n' + shader.vertexShader;
+        shader.vertexShader = 'uniform mat4 marsFrame;\nvarying vec3 marsPosition;\nvarying vec3 marsSmoothNormal;\n' + shader.vertexShader;
+        shader.vertexShader = shader.vertexShader.replace('#include <defaultnormal_vertex>', `
+            #include <defaultnormal_vertex>
+            marsSmoothNormal = mat3(marsFrame) * inverseTransformDirection(transformedNormal, viewMatrix);
+        `);
         shader.vertexShader = shader.vertexShader.replace('#include <worldpos_vertex>', `
             #include <worldpos_vertex>
             vec4 marsVertex = vec4(transformed, 1.0);
@@ -55,6 +59,7 @@ export function addMarsSurfaceDetail(material, rocky = false, rockTextures = nul
             marsPosition = (marsFrame * modelMatrix * marsVertex).xyz;
         `);
         shader.fragmentShader = `varying vec3 marsPosition;
+            varying vec3 marsSmoothNormal;
             float marsHash(vec2 p) {
                 return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
             }
@@ -87,8 +92,73 @@ export function addMarsSurfaceDetail(material, rocky = false, rockTextures = nul
                 vec3 basaltDust = vec3(0.84, 0.88, 0.96);
                 diffuseColor.rgb *= mix(vec3(1.0), paleDust, smoothstep(0.43, 0.78, dustBasin) * 0.65);
                 diffuseColor.rgb *= mix(vec3(1.0), basaltDust, smoothstep(0.58, 0.85, mineralBed) * 0.4);
+                vec3 marsUp = normalize(marsPosition + vec3(0.0, 50000.0, 0.0));
+                float marsSlope = 1.0 - abs(dot(normalize(marsSmoothNormal), marsUp));
+                float marsExposedRock = smoothstep(0.045, 0.3, marsSlope);
+                float marsBedding = sin(marsPosition.y * 0.9 + mineralBed * 2.0);
+                marsBedding *= 1.0 - smoothstep(0.5, 3.0, fwidth(marsPosition.y));
+                vec3 marsSediment = mix(vec3(1.035, 1.02, 0.98), vec3(0.77, 0.79, 0.81), marsExposedRock);
+                diffuseColor.rgb *= marsSediment * (1.0 + marsBedding * marsExposedRock * 0.065);
+                vec3 localPoint = marsUp * 50000.0;
+                float localField = 0.5 + 0.5 * sin(localPoint.x * .041 + sin(localPoint.z * .027 + localPoint.y * .019) * 1.7) *
+                    cos(localPoint.z * .034 - localPoint.y * .021 + sin(localPoint.x * .017) * .8);
+                float duneErosion = 1.0 + sin(localPoint.x * .11 + localPoint.z * .06) * .07 + sin(localPoint.z * .13 - localPoint.x * .04) * .05;
+                float desertSand = (1.0 - smoothstep(.55, 1.0, length((localPoint.xz - vec2(73.0, -37.0)) / vec2(70.0, 55.0)) * duneErosion)) * smoothstep(49990.0, 49999.0, localPoint.y);
+                float localSand = max(1.0 - smoothstep(.18, .36, localField), desertSand);
+                float localGravel = smoothstep(.2, .38, localField) * (1.0 - smoothstep(.52, .66, localField));
+                float localSlab = smoothstep(.5, .66, localField) * (1.0 - smoothstep(.78, .9, localField));
+                float localClay = smoothstep(.76, .92, localField);
+                localGravel *= 1.0 - desertSand;
+                localSlab *= 1.0 - desertSand;
+                localClay *= 1.0 - desertSand;
+                marsExposedRock *= 1.0 - desertSand;
+                diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.15, 1.12, 1.02), desertSand);
+                float localDetail = 1.0 - smoothstep(.12, .8, marsFootprint);
+                float sandRipples = sin(dot(marsPosition.xz, vec2(6.2, 2.5)) + mineralBed * 3.5);
+                float gravelGrain = marsNoise(marsPosition.xz * 10.5 + vec2(37.0, 11.0));
+                float pebbles = smoothstep(.65, .83, gravelGrain) * localGravel * localDetail;
+                vec2 clayPosition = marsPosition.xz * 1.1;
+                vec2 clayCell = floor(clayPosition);
+                vec2 clayFraction = fract(clayPosition);
+                float clayNearest = 8.0;
+                float claySecond = 8.0;
+                for (int cy = -1; cy <= 1; cy++) {
+                    for (int cx = -1; cx <= 1; cx++) {
+                        vec2 neighbor = vec2(float(cx), float(cy));
+                        vec2 seed = clayCell + neighbor;
+                        vec2 jitter = fract(sin(vec2(dot(seed, vec2(127.1, 311.7)), dot(seed, vec2(269.5, 183.3)))) * 43758.5453);
+                        vec2 delta = neighbor + .15 + jitter * .7 - clayFraction;
+                        float distanceToCell = dot(delta, delta);
+                        claySecond = min(claySecond, max(clayNearest, distanceToCell));
+                        clayNearest = min(clayNearest, distanceToCell);
+                    }
+                }
+                float clayEdge = (claySecond - clayNearest) * .5;
+                float crackWidth = max(.008, length(fwidth(marsPosition.xz)) * 1.1);
+                float cracks = (1.0 - smoothstep(.012, .012 + crackWidth, clayEdge)) * localClay * localDetail;
+                vec3 localTint = vec3(1.0) + localSand * vec3(.09,.08,.04) +
+                    localGravel * vec3(-.08,-.07,-.045) + localSlab * vec3(-.19,-.15,-.09) + localClay * vec3(-.04,.015,.06);
+                diffuseColor.rgb *= localTint * (1.0 - pebbles * .28 - cracks * .22 + sandRipples * localSand * localDetail * .025);
+                marsExposedRock = max(marsExposedRock, localSlab * .85);
+                float marsFineRelief = (mottling - 0.5) * mix(0.008, 0.025, marsExposedRock);
+                marsFineRelief += sandRipples * localSand * .007 + (gravelGrain - .5) * localGravel * .018 - cracks * .006;
+                marsFineRelief *= 1.0 - smoothstep(0.15, 1.5, marsFootprint);
             `}
         `);
+        if (!rocky) {
+            shader.fragmentShader = shader.fragmentShader.replace('#include <roughnessmap_fragment>', `
+                #include <roughnessmap_fragment>
+                roughnessFactor = clamp(roughnessFactor * mix(1.0, 0.84, marsExposedRock), 0.78, 1.0);
+            `);
+            shader.fragmentShader = shader.fragmentShader.replace('#include <normal_fragment_maps>', `
+                #include <normal_fragment_maps>
+                vec3 groundDx = dFdx(-vViewPosition), groundDy = dFdy(-vViewPosition);
+                vec3 groundR1 = cross(groundDy, normal), groundR2 = cross(normal, groundDx);
+                float groundDet = dot(groundDx, groundR1);
+                vec3 groundGradient = sign(groundDet) * (dFdx(marsFineRelief) * groundR1 + dFdy(marsFineRelief) * groundR2);
+                if (abs(groundDet) > 1e-10) normal = normalize(abs(groundDet) * normal - groundGradient);
+            `);
+        }
         if (rocky && rockTextures) {
             shader.uniforms.marsRockColor = { value: rockTextures.color };
             shader.uniforms.marsRockSurface = { value: rockTextures.surface };
@@ -106,13 +176,15 @@ export function addMarsSurfaceDetail(material, rocky = false, rockTextures = nul
                 vec3 rockCoordinates = marsPosition * 2.5;
                 vec3 rockAlbedo = marsTriplanar(marsRockColor, rockCoordinates, marsWeights).rgb;
                 vec4 rockSurface = marsTriplanar(marsRockSurface, rockCoordinates, marsWeights);
-                // Neutral mineral variation preserves each instance's basalt/ochre tint.
-                diffuseColor.rgb *= rockAlbedo;
-                diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.04, 0.99, 0.92), rockSurface.b * 0.25);
+                vec3 rockUp = normalize(marsPosition + vec3(0.0, 50000.0, 0.0));
+                float rockDust = smoothstep(0.25, 0.85, dot(normalize(marsSmoothNormal), rockUp));
+                rockDust *= 0.25 + rockSurface.b * 0.35;
+                rockAlbedo = mix(rockAlbedo, rockAlbedo * vec3(1.12, 1.05, 0.94), rockDust);
+                diffuseColor.rgb *= rockAlbedo * (0.90 + rockSurface.b * 0.12);
             `);
             shader.fragmentShader = shader.fragmentShader.replace('#include <roughnessmap_fragment>', `
                 #include <roughnessmap_fragment>
-                roughnessFactor = clamp(rockSurface.g, 0.82, 1.0);
+                roughnessFactor = clamp(rockSurface.g + rockDust * 0.08, 0.78, 1.0);
             `);
             shader.fragmentShader = shader.fragmentShader.replace('#include <normal_fragment_maps>', `
                 #include <normal_fragment_maps>
@@ -122,11 +194,11 @@ export function addMarsSurfaceDetail(material, rocky = false, rockTextures = nul
                 float rockDet = dot(rockDx, rockR1);
                 vec3 rockGradient = sign(rockDet) *
                     (dFdx(rockSurface.r) * rockR1 + dFdy(rockSurface.r) * rockR2);
-                if (abs(rockDet) > 1e-10) normal = normalize(abs(rockDet) * normal - 0.004 * rockGradient);
+                if (abs(rockDet) > 1e-10) normal = normalize(abs(rockDet) * normal - ${mobileGraphics ? '0.008' : '0.012'} * rockGradient);
             `);
         }
     };
-    material.customProgramCacheKey = () => `mars-surface-${rocky}-${Boolean(rockTextures)}`;
+    material.customProgramCacheKey = () => `mars-surface-desert-dunes-v4-${rocky}-${Boolean(rockTextures)}`;
     return material;
 }
 
@@ -167,15 +239,15 @@ export function createMarsRockTextures(renderer) {
         const grain = hash(x, y);
         const pores = Math.pow(Math.max(0, (0.4 - fine) / 0.4), 2);
         const vein = Math.pow(Math.max(0, 1 - Math.abs(mineral - 0.48) * 35), 3);
-        const shade = 238 + (mineral - 0.5) * 22 + (granular - 0.5) * 16 - pores * 32 + vein * 7;
-        const height = 133 + (granular - 0.5) * 42 + (fine - 0.5) * 28 - pores * 85 + (grain - 0.5) * 9;
+        const shade = 228 + (mineral - 0.5) * 36 + (granular - 0.5) * 28 - pores * 48 + vein * 14;
+        const height = 128 + (granular - 0.5) * 52 + (fine - 0.5) * 32 - pores * 95 + (grain - 0.5) * 9;
         const index = (y * size + x) * 4;
         const color = layers[0].image.data;
         color[index] = shade + 2; color[index + 1] = shade; color[index + 2] = shade - 3; color[index + 3] = 255;
         // Pack relief, roughness and mineral dust into a single linear texture.
         const surface = layers[1].image.data;
         surface[index] = height;
-        surface[index + 1] = 224 + granular * 27;
+        surface[index + 1] = 205 + granular * 38;
         surface[index + 2] = mineral * 255;
         surface[index + 3] = 255;
     }

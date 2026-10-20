@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { duneHeight } from './local-surface.js';
 import { createExplorationCatalog } from './exploration-catalog.js';
 import { getDrivingPanel } from './ui.js';
 
@@ -10,7 +11,7 @@ const zone = (x, z, cx, cz, rx, rz) => {
 };
 
 export function getMarsRegion(x, z) {
-    const dunes = zone(x, z, 73, -37, 54, 42);
+    const dunes = zone(x, z, 73, -37, 70, 55);
     const canyon = zone(x, z, -70, -29, 37, 65);
     const mesas = zone(x, z, -63, 65, 49, 40);
     const lake = zone(x, z, 25, 65, 38, 29);
@@ -24,8 +25,7 @@ export function getMarsRegion(x, z) {
 
 export function shapeMarsTerrain(x, z, base) {
     const region = getMarsRegion(x, z);
-    const dunePhase = x * 0.32 + z * 0.14 + Math.sin(z * 0.075) * 1.7;
-    const dunes = Math.pow(0.5 + 0.5 * Math.sin(dunePhase), 2.5) * 2.2;
+    const dunes = duneHeight(x, 50000, z);
     let height = mix(base, base * 0.32 + dunes, region.dunes);
     // Wide entrances and a winding floor make the canyon a route, not a trap.
     const canyonCenter = -70 + Math.sin(z * 0.045) * 7 + Math.sin(z * 0.11) * 2;

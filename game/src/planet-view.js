@@ -194,17 +194,16 @@ export function createPlanetView({ renderer, planet, getPosition, onEnter, onExi
         <button type="button" data-dismiss-help aria-label="Cerrar controles" autofocus>✕</button></header>
         <h3>Teclado</h3><dl>
         <dt>W / S</dt><dd>Avanzar / retroceder.</dd>
-        <dt>A / D</dt><dd>Girar.</dd>
-        <dt>Espacio</dt><dd>Frenar. En vuelo, estabilizar y detenerse.</dd>
-        <dt>Z</dt><dd>Mantener para despegar o subir.</dd>
-        <dt>F</dt><dd>Dar un impulso de salto.</dd>
-        <dt>X</dt><dd>Mantener para bajar: rápido a gran altura, con frenado automático cerca del suelo.</dd>
-        <dt>G</dt><dd>Mantener para volar más rápido.</dd>
+        <dt>A / D o ← / →</dt><dd>Girar.</dd>
+        <dt>Espacio</dt><dd>Despegar o subir. Al soltar, mantener la altura.</dd>
+        <dt>C</dt><dd>Frenar en tierra. En vuelo, bajar y aproximarse al suelo.</dd>
+        <dt>F</dt><dd>Saltar en tierra. En vuelo, frenar y estabilizar.</dd>
+        <dt>W dos veces</dt><dd>Pulsar dos veces y mantener la segunda pulsación para activar el turbo en tierra o en vuelo. Soltar W para desactivarlo.</dd>
         <dt>↑ / ↓</dt><dd>En vuelo: bajar / levantar el morro. Al soltar, recuperar suavemente el vuelo horizontal.</dd>
-        <dt>← / →</dt><dd>En vuelo: desplazarse hacia los lados.</dd>
-        <dt>E</dt><dd>Mantener para escanear, detenido junto al objetivo.</dd></dl>
-        <h3>Móvil</h3><p>Joystick izquierdo: avanzar, retroceder y girar. En vuelo, el derecho controla el morro y el desplazamiento lateral. Al soltarlo, el rover recupera suavemente el vuelo horizontal.</p>
-        <p>Mantén los botones para frenar, subir, bajar o escanear. Toca «Impulso» para dar un salto y «Rápido» para activar o desactivar la velocidad rápida en vuelo.</p>
+        <dt>E</dt><dd>En tierra, mantener para escanear junto al objetivo.</dd>
+        <dt>Z / X / G</dt><dd>Alternativas para subir, bajar y activar el turbo.</dd></dl>
+        <h3>Móvil</h3><p>Joystick izquierdo: avanzar, retroceder y girar. En vuelo, el izquierdo controla el avance y el desplazamiento lateral; el derecho gira y orienta el morro. Al soltarlo, el rover recupera suavemente el vuelo horizontal.</p>
+        <p>Mantén los botones para frenar, subir, bajar o escanear. Toca «Saltar» para dar un salto y «Turbo» para activar o desactivar la velocidad rápida en vuelo.</p>
         <h3>Explorar</h3><p>Abre ☰ y toca un punto del planeta para elegir un objetivo. Usa «Centrar objetivo» y «Descender aquí» para acercarte. Ya en tierra, sigue el minimapa y detente junto al objetivo para escanearlo.</p>
         <p>Arrastra el planeta para girarlo y usa + / − para acercarte o alejarte. «Ir a Base Papaya» te devuelve a la base.</p>
         <h3>Carreras</h3><p>Abre «Carreras» en el menú, elige una prueba y sigue las balizas en orden.</p>`;

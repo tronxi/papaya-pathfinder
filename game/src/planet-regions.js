@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { duneHeight, localGroundRelief } from './local-surface.js';
 
 // Fictional regions inspired by Martian landforms, sampled in 3D to avoid seams.
 export const PLANET_REGIONS = [
@@ -79,7 +80,7 @@ export function planetGroundDetail(n, radius, field = planetRegionField(n, radiu
     // Dunes are gentler, basalt rougher; both still have physical wheel-scale relief.
     const duneWeight=1-THREE.MathUtils.smoothstep(Math.abs(field-1),.15,.9);
     const basaltWeight=THREE.MathUtils.smoothstep(field,4,5);
-    return hills*(1-.45*duneWeight)+uneven*(1-.4*duneWeight+.25*basaltWeight)+bumps;
+    return localGroundRelief(x,y,z,hills*(1-.45*duneWeight),uneven*(1-.4*duneWeight+.25*basaltWeight),bumps);
 }
 
 export function planetSurface(n, radius, groundDetail = true) {
@@ -87,7 +88,7 @@ export function planetSurface(n, radius, groundDetail = true) {
     const field = planetRegionField(n, radius), a = Math.floor(field), b = Math.min(5, a + 1);
     const blend = THREE.MathUtils.smoothstep(field - a, 0, 1);
     const broad = Math.sin(x / 830 + Math.sin(z / 1100)) * Math.cos(y / 960 + z / 690) * 4;
-    const ripples = Math.pow(0.5 + 0.5 * Math.sin(x / 13 + z / 23 + Math.sin(y / 110)), 3);
+    const dunes = duneHeight(x, y, z);
     const basin = 0.5 + 0.5 * Math.sin(x / 290 + y / 370) * Math.sin(z / 310 - y / 430);
     const crater = -18 * (1 - THREE.MathUtils.smoothstep(basin, 0.08, 0.3)) +
         9 * Math.exp(-(((basin - 0.32) / 0.065) ** 2));
@@ -95,7 +96,7 @@ export function planetSurface(n, radius, groundDetail = true) {
     const canyon = -20 + THREE.MathUtils.smoothstep(channel, 0.12, 0.45) * 31;
     const mesa = THREE.MathUtils.smoothstep(basin, 0.35, 0.52) * 23 - 5;
     const lava = Math.pow(0.5 + 0.5 * Math.sin(x / 33 + z / 46 + y / 72), 3) * 3;
-    const heights = [broad, broad * 0.4 + ripples * 5, broad + crater, broad * 0.4 + canyon,
+    const heights = [broad, broad * 0.4 + dunes, broad + crater, broad * 0.4 + canyon,
         broad * 0.5 + mesa, broad * 1.6 + lava];
     return { height: planetMacroHeight(n, radius) + THREE.MathUtils.lerp(heights[a], heights[b], blend) +
         (groundDetail ? planetGroundDetail(n, radius, field) : 0),

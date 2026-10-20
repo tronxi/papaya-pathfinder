@@ -17,29 +17,39 @@ export function createTouchControls() {
     const keys = new Set(), pointers = new Map();
     const axes = { throttle: 0, steering: 0, pitch: 0, strafe: 0 };
     const media = window.matchMedia('(pointer: coarse)');
-    let boost = false, flight = false, airTime = 0, canScan = false;
+    let boost = false, flight = false, canScan = false;
     const root = document.createElement('div');
     root.id = 'rover-touch-controls'; root.dataset.flight = 'false';
     root.setAttribute('aria-label', 'Controles táctiles del rover');
-    root.innerHTML = `<div class="touch-stick touch-stick-drive" role="group" aria-label="Avanzar y girar">
+    root.innerHTML = `<div class="touch-stick touch-stick-drive" role="group" aria-label="Avanzar y girar"><span class="touch-stick-label" data-drive-label>CONDUCIR</span>
         <span class="touch-stick-rings" aria-hidden="true"></span><span class="touch-stick-cross" aria-hidden="true"></span>
         <span class="touch-stick-knob" aria-hidden="true"></span></div>
-        <div class="touch-stick touch-stick-aim" role="group" aria-label="Cabeceo y desplazamiento lateral" hidden>
+        <div class="touch-stick touch-stick-aim" role="group" aria-label="Girar y orientar el morro" hidden><span class="touch-stick-label">ORIENTAR</span>
         <span class="touch-stick-rings" aria-hidden="true"></span><span class="touch-stick-cross" aria-hidden="true"></span>
         <span class="touch-stick-knob" aria-hidden="true"></span></div>
         <div class="touch-actions">
-            ${action('hop', 'Impulso', 'KeyF')}
+            ${action('hop', 'Saltar', 'KeyF')}
             ${action('brake', 'Freno', 'Space')}
-            ${action('up', 'Despegar', 'KeyZ')}${action('down', 'Bajar', 'KeyX', 'hidden')}
-            ${action('boost', 'Rápido', 'KeyG', 'data-toggle-boost hidden')}
+            ${action('up', 'Volar', 'KeyZ')}${action('down', 'Bajar', 'KeyX', 'hidden')}
+            ${action('boost', 'Turbo', 'KeyG', 'data-toggle-boost hidden')}
             ${action('scan', 'Escanear', 'KeyE', 'hidden')}
         </div>`;
     document.body.appendChild(root);
+    const hints = document.createElement('div'); hints.id = 'rover-keyboard-hints';
+    document.body.appendChild(hints);
+    function keyboardHints() {
+        const entries = flight
+            ? [['WASD', 'Volar'], ['A/D · ←/→', 'Girar'], ['Espacio', 'Subir'], ['C', 'Bajar'], ['W ×2 y mantener', 'Turbo'], ['F', 'Estabilizar']]
+            : [['WASD', 'Conducir'], ['W ×2 y mantener', 'Turbo'], ['Espacio', 'Volar'], ['F', 'Saltar'], ['C', 'Frenar'], ['M', 'Mapa']];
+        hints.innerHTML = entries.map(([key, label]) => `<span><kbd>${key}</kbd>${label}</span>`).join('');
+    }
+    keyboardHints();
     const stick = root.querySelector('.touch-stick-drive');
     const aim = root.querySelector('.touch-stick-aim');
     const sticks = [stick, aim];
     const buttons = [...root.querySelectorAll('[data-key]')];
     const up = root.querySelector('.touch-up'), down = root.querySelector('.touch-down');
+    const hop = root.querySelector('.touch-hop');
     const fast = root.querySelector('.touch-boost'), scan = root.querySelector('.touch-scan');
     function refresh() {
         keys.clear();
@@ -51,15 +61,27 @@ export function createTouchControls() {
         if (boost && flight) keys.add('KeyG');
         for (const button of buttons) button.setAttribute('aria-pressed', String(keys.has(button.dataset.key)));
     }
+    function setStickAxes(element, x, y) {
+        if (element === stick) {
+            axes.throttle = -y;
+            if (flight) axes.strafe = -x; else axes.steering = -x;
+        } else {
+            axes.pitch = y; axes.steering = -x;
+        }
+    }
     function moveStick(event, element) {
         const bounds = element.getBoundingClientRect(), radius = bounds.width * 0.34;
         let x = (event.clientX - bounds.left - bounds.width / 2) / radius;
         let y = (event.clientY - bounds.top - bounds.height / 2) / radius;
         const length = Math.hypot(x, y);
         if (length > 1) { x /= length; y /= length; }
-        const response = value => Math.abs(value) < 0.14 ? 0 : Math.sign(value) * (Math.abs(value) - 0.14) / 0.86;
-        if (element === stick) { axes.throttle = -response(y); axes.steering = -response(x); }
-        else { axes.pitch = response(y); axes.strafe = -response(x); }
+        const magnitude = Math.min(1, length);
+        const strength = magnitude <= 0.12 ? 0 : Math.pow((magnitude - 0.12) / 0.88, 1.35);
+        const axisX = magnitude ? x / magnitude * strength : 0;
+        const axisY = magnitude ? y / magnitude * strength : 0;
+        const record = pointers.get(event.pointerId);
+        if (record) { record.x = axisX; record.y = axisY; }
+        setStickAxes(element, axisX, axisY);
         element.style.setProperty('--stick-x', `${x * radius}px`); element.style.setProperty('--stick-y', `${y * radius}px`);
         refresh();
     }
@@ -67,8 +89,8 @@ export function createTouchControls() {
         const record = pointers.get(event.pointerId); if (!record) return;
         pointers.delete(event.pointerId);
         if (sticks.includes(record.element)) {
-            if (record.element === stick) axes.throttle = axes.steering = 0;
-            else axes.pitch = axes.strafe = 0;
+            if (record.element === stick) { axes.throttle = 0; if (flight) axes.strafe = 0; else axes.steering = 0; }
+            else axes.pitch = axes.steering = 0;
             record.element.style.setProperty('--stick-x', '0px'); record.element.style.setProperty('--stick-y', '0px');
             record.element.classList.remove('is-active');
         }
@@ -105,7 +127,7 @@ export function createTouchControls() {
         root.addEventListener(type, event => event.stopPropagation());
     }
     function clear() {
-        pointers.clear(); boost = false; airTime = 0; canScan = false; scan.hidden = true;
+        pointers.clear(); boost = false; canScan = false; scan.hidden = true;
         for (const key of Object.keys(axes)) axes[key] = 0;
         for (const element of sticks) {
             element.style.setProperty('--stick-x', '0px'); element.style.setProperty('--stick-y', '0px');
@@ -121,19 +143,23 @@ export function createTouchControls() {
     return {
         has: code => media.matches && keys.has(code),
         axis: name => media.matches ? axes[name] ?? 0 : 0,
-        update({ airborne, powered = false, scanAvailable = false, delta = 1 / 60 }) {
-            airTime = airborne ? airTime + delta : 0;
-            const nextFlight = powered || airTime > 0.18;
+        update({ airborne, powered = false, scanAvailable = false }) {
+            const nextFlight = powered;
             const nextScan = !airborne && !nextFlight && scanAvailable;
             if (flight === nextFlight && canScan === nextScan) return;
             flight = nextFlight; canScan = nextScan; root.dataset.flight = String(flight);
+            keyboardHints();
             document.documentElement.classList.toggle('touch-flight', flight);
-            aim.hidden = down.hidden = fast.hidden = !flight; scan.hidden = !canScan;
-            up.querySelector('span').textContent = flight ? 'Subir' : 'Despegar';
-            up.setAttribute('aria-label', flight ? 'Subir' : 'Despegar');
-            stick.setAttribute('aria-label', flight ? 'Volar: avanzar y girar' : 'Avanzar y girar');
-            if (!flight) { boost = false; axes.pitch = axes.strafe = 0; }
+            aim.hidden = down.hidden = fast.hidden = !flight; scan.hidden = !canScan; hop.hidden = flight;
+            up.querySelector('span').textContent = flight ? 'Subir' : 'Volar';
+            up.setAttribute('aria-label', flight ? 'Subir' : 'Volar');
+            stick.setAttribute('aria-label', flight ? 'Volar: avanzar y desplazarse lateralmente' : 'Avanzar y girar');
+            root.querySelector('[data-drive-label]').textContent = flight ? 'MOVER' : 'CONDUCIR';
             for (const [pointerId, record] of pointers) if (record.element.hidden) release({ pointerId });
+            for (const name of Object.keys(axes)) axes[name] = 0;
+            for (const record of pointers.values()) if (sticks.includes(record.element) && !record.element.hidden)
+                setStickAxes(record.element, record.x ?? 0, record.y ?? 0);
+            if (!flight) { boost = false; axes.pitch = axes.strafe = 0; }
             refresh();
         },
         reset: clear,

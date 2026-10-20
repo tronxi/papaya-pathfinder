@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { localSurfaceWeights } from './local-surface.js';
 import { createSurfaceTransition } from './surface-transition.js';
 
 // Cube-face cells give every rock and outpost a permanent planetary address.
@@ -37,25 +38,74 @@ export function createPlanetLife({ planet, scene, world, physics, rockShapes, ro
         const colliders = [], objects = [];
         const center = surfacePosition(face,(x+.5)*size,(z+.5)*size,new THREE.Vector3());
         const region = planet.surface(center.clone().normalize()).region;
+        const cellUp = center.clone().normalize();
+        const east = new THREE.Vector3(0, 0, Math.abs(cellUp.z) > 0.9 ? 0 : 1);
+        if (east.lengthSq() === 0) east.set(1, 0, 0);
+        east.cross(cellUp).normalize();
+        const north = new THREE.Vector3().crossVectors(cellUp, east).normalize();
+        const slopeSample = new THREE.Vector3(), span = 16;
+        const sampleHeight = (axis, sign) => planet.elevation(slopeSample.copy(cellUp).addScaledVector(axis, sign * span / radius).normalize(), false);
+        const slopeEast = THREE.MathUtils.clamp((sampleHeight(east, 1) - sampleHeight(east, -1)) / (2 * span), -0.8, 0.8);
+        const slopeNorth = THREE.MathUtils.clamp((sampleHeight(north, 1) - sampleHeight(north, -1)) / (2 * span), -0.8, 0.8);
+        const groundUp = cellUp.clone().addScaledVector(east, -slopeEast).addScaledVector(north, -slopeNorth).normalize();
+        const groundTilt = new THREE.Quaternion().setFromUnitVectors(cellUp, groundUp);
+        const tumble = new THREE.Quaternion(), tumbleAngles = new THREE.Euler();
+        const mineralColor = new THREE.Color(region.rocks > 40 ? 0x55534d : 0x8a7258);
+        const stoneColor = new THREE.Color();
         const count = Math.round((420 + region.rocks * 6) * (mobile ? .65 : 1));
         const meshes = rockShapes.map(shape => {
             const mesh = new THREE.InstancedMesh(shape, rockMaterial, count);mesh.count = 0;
             mesh.castShadow = true;mesh.receiveShadow = true;group.add(mesh);return mesh;
         });
         const site = catalog.cellSite(face, x, z);
+        const clusters = Array.from({ length: 8 }, () => {
+            let u, v, habitat;
+            for (let attempt=0;attempt<4;attempt++) {
+                u=(x+random())*size; v=(z+random())*size;
+                direction(face,u/radius,v/radius,slopeSample);
+                habitat=localSurfaceWeights(slopeSample.x*radius,slopeSample.y*radius,slopeSample.z*radius);
+                if(habitat.gravel+habitat.slab>.55)break;
+            }
+            return { u,v,spread:4+random()*12,angle:random()*Math.PI*2,
+                kind:habitat.slab>.4?1:habitat.sand>.5?3:random()<.55?0:2 };
+        });
+        const depositColors = [new THREE.Color(0x766657),new THREE.Color(0xa18e75),
+            new THREE.Color(0x514d47),new THREE.Color(0xb99970)];
         for (let i=0;i<count;i++) {
-            const position = surfacePosition(face,(x+random())*size,(z+random())*size,new THREE.Vector3());
+            const clustered = random()<.72;
+            const cluster = clusters[Math.floor(random()*clusters.length)];
+            const angleOffset = random()*Math.PI*2, reach = Math.sqrt(random())*cluster.spread;
+            const u = clustered ? cluster.u+Math.cos(angleOffset)*reach : (x+random())*size;
+            const v = clustered ? cluster.v+Math.sin(angleOffset)*reach : (z+random())*size;
+            const position = surfacePosition(face,u,v,new THREE.Vector3());
             if (planet.homeDistance(planet.toLocal(position,local)) < 340) continue;
             if (site && position.distanceTo(site.position) < 6) continue;
             normal.copy(position).normalize();
-            const height = .12 + Math.pow(random(),3)*1.3;
-            const angle = random()*Math.PI*2;
+            const habitat = localSurfaceWeights(normal.x*radius,normal.y*radius,normal.z*radius);
+            if(!clustered && random()>.25+habitat.gravel*.65+habitat.slab*.45)continue;
+            const kind = clustered ? cluster.kind : habitat.slab>.45?1:habitat.clay>.5?3:0;
+            const height = kind===0 ? .045+Math.pow(random(),2)*.38
+                : kind===1 ? .35+Math.pow(random(),2)*1.65
+                : kind===2 ? .12+Math.pow(random(),3)*1.3 : .04+random()*.2;
+            const angle = kind===1 ? cluster.angle+(random()-.5)*.35 : random()*Math.PI*2;
             rotation.setFromUnitVectors(up,normal).multiply(spin.setFromAxisAngle(up,angle));
-            scale.set(height*(1+random()),height*.7,height*(.8+random()));
-            position.addScaledVector(normal,height*.25);
-            const variant = Math.floor(random()*meshes.length), mesh=meshes[variant];
+            rotation.premultiply(groundTilt).multiply(tumble.setFromEuler(tumbleAngles.set((random()-.5)*.4,0,(random()-.5)*.4)));
+            scale.set(height*(kind===1?1.8+random()*1.5:.8+random()*1.1),
+                height*(kind===1?.3:.55+random()*.3),height*(.65+random()*1.2));
+            let supportHeight = position.length() - radius;
+            if (height > 0.45) {
+                const footprint = height * 0.65 / radius;
+                for (const axis of [east, north]) for (const side of [-1, 1]) {
+                    const ground = planet.elevation(slopeSample.copy(normal).addScaledVector(axis, side * footprint).normalize());
+                    supportHeight = Math.min(supportHeight, ground);
+                }
+                position.copy(normal).multiplyScalar(radius + supportHeight);
+            }
+            position.addScaledVector(normal,height*(.08+random()*.16));
+            const variant = kind===1 ? [0,3,6][Math.floor(random()*3)] : Math.floor(random()*meshes.length), mesh=meshes[variant];
             matrix.compose(position,rotation,scale);mesh.setMatrixAt(mesh.count++,matrix);
-            mesh.setColorAt(mesh.count-1,new THREE.Color(region.color).multiplyScalar(.55+random()*.25));
+            stoneColor.set(region.color).lerp(mineralColor,.3).lerp(depositColors[kind],.4+random()*.3).multiplyScalar(.8+random()*.25);
+            mesh.setColorAt(mesh.count-1,stoneColor);
             objects.push({position,rotation:rotation.clone(),scale:scale.clone(),shape:rockShapes[variant]});
         }
         for(const mesh of meshes) {mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();}

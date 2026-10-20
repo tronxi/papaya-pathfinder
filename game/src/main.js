@@ -1,3 +1,4 @@
+import { localSurfaceWeights } from './local-surface.js';
 import { hash, smoothNoise, fbm, getHomeTerrainHeight } from './home-terrain.js';
 import { predictedFlightClearance, FLIGHT_STREAMING_CEILING } from './flight-detail.js';
 import { createLandingBase, isLandingBaseArea } from './landing-base.js';
@@ -34,18 +35,25 @@ const CONFIG = {
     MAX_STEERING_ANGLE: THREE.MathUtils.degToRad(45),
     STEERING_SPEED: 5,
     MAX_SPEED: 8,
+    GROUND_BOOST_SPEED: 24,
     RACE_MAX_SPEED: 7,
     DRIVE_THRUST_ACCELERATION: 5,
     HOP_SPEED: 6,
     CONTINUOUS_LIFT_ACCELERATION: 90,
     FLIGHT_ASCENT_SPEED: 2500,
     FLIGHT_DESCENT_SPEED: 20000,
-    AIR_THRUST_ACCELERATION: 11,
+    AIR_THRUST_ACCELERATION: 22,
+    AIR_CRUISE_SPEED: 90,
+    AIR_REVERSE_SPEED: 15,
+    AIR_STRAFE_SPEED: 18,
+    AIR_SPEED_RESPONSE: 2,
+    AIR_HEADING_RESPONSE: 3,
+    AIR_PITCH_LIMIT: THREE.MathUtils.degToRad(50),
     AIR_BOOST_ACCELERATION: 60,
     AIR_FORWARD_BOOST_ACCELERATION: 1800,
     AIR_BOOST_ACCELERATION_RAMP: 1200,
     AIR_BOOST_CRUISE_SPEED: 6000,
-    AIR_BOOST_LOW_ALTITUDE_SPEED: 40,
+    AIR_BOOST_LOW_ALTITUDE_SPEED: 180,
     AIR_BOOST_SPEED_RESPONSE: 2,
     AIR_LATERAL_STABILIZATION_ACCELERATION: 70,
     AIR_FAST_TURN_SPEED: 35,
@@ -55,7 +63,7 @@ const CONFIG = {
     AIR_DRIFT_DAMPING: 0.25,
     AIR_BRAKING_RESPONSE: 4,
     MAX_REVERSE_SPEED: 3,
-    STEERING_HIGH_SPEED_FACTOR: 0.35,
+    STEERING_HIGH_SPEED_FACTOR: 0.55,
     YAW_RESPONSE: 4,
     PIVOT_YAW_SPEED: 0.65,
     LATERAL_RESPONSE: 14,
@@ -92,7 +100,7 @@ const CONFIG = {
     DESCENT_VERTICAL_SPEED: 1.3,
     DESCENT_SPEED_RESPONSE: 3,
     HILL_HOLD_TIME: 0.7,
-    UNDERSTEER_SPEED: 6,
+    UNDERSTEER_SPEED: 9,
     CENTER_OF_MASS_HEIGHT: 0.45,
     LOW_GEAR_ACCELERATION: 15,
     CLIMB_GRIP: 2.6,
@@ -221,7 +229,7 @@ renderer.setPixelRatio(
 
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.3;
+renderer.toneMappingExposure = 1.12;
 
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -413,22 +421,23 @@ function updateFollowCamera(delta) {
 
 scene.add(
     new THREE.HemisphereLight(
-        0xffe8cd,
-        0xa77a5c,
-        2.0
+        0xffe6cc,
+        0x756653,
+        1.35
     )
 );
 
 const sunlight = new THREE.DirectionalLight(
-    0xffefd6,
-    3.4
+    0xffe5c6,
+    3.15
 );
 
 sunlight.position.set(-45, 30, -35);
 sunlight.castShadow = true;
 const shadowSize = mobileGraphics ? 1024 : 2048;
 sunlight.shadow.mapSize.set(shadowSize, shadowSize);
-sunlight.shadow.normalBias = 0.02;
+sunlight.shadow.normalBias = 0.015;
+sunlight.shadow.radius = mobileGraphics ? 1.5 : 2;
 sunlight.shadow.bias = -0.0001;
 
 sunlight.shadow.camera.left = -32;
@@ -613,8 +622,8 @@ world.createCollider(
 // -----------------------------------------------------------------------------
 
 // Weathered silhouettes; the visible hull is also used for collision.
-const rockShapes = Array.from({ length: 5 }, (_, index) => {
-    const base = new THREE.IcosahedronGeometry(1, 1);
+const rockShapes = Array.from({ length: 7 }, (_, index) => {
+    const base = new THREE.IcosahedronGeometry(1, index % 3 === 0 ? 0 : 1);
     const positions = base.attributes.position;
     const points = [];
     for (let i = 0; i < positions.count; i++) {
@@ -622,7 +631,10 @@ const rockShapes = Array.from({ length: 5 }, (_, index) => {
         const erosion = 1 + smoothNoise(point.x * 2.7 + index * 13,
             point.z * 2.7 + point.y * 1.8) * 0.18;
         point.multiplyScalar(erosion);
-        point.y *= 0.9 + smoothNoise(point.x * 3 + index, point.z * 3) * 0.1;
+        point.y *= (index % 3 === 0 ? 0.62 : 0.88) + smoothNoise(point.x * 3 + index, point.z * 3) * 0.12;
+        // Bedding planes and asymmetric erosion avoid repeating rounded pebbles.
+        point.x += point.y * (index % 2 ? 0.18 : -0.12);
+        point.z *= 0.82 + index * 0.045;
         points.push(point);
     }
     const hull = new ConvexGeometry(points);
@@ -635,11 +647,11 @@ const rockShapes = Array.from({ length: 5 }, (_, index) => {
 });
 
 const rockColors = [
-    new THREE.Color(0x754536),
-    new THREE.Color(0x6b5049),
-    new THREE.Color(0xaa6748),
-    new THREE.Color(0x4e3c39),
-    new THREE.Color(0xbd8060)
+    new THREE.Color(0x75604e),
+    new THREE.Color(0x686159),
+    new THREE.Color(0x9a785b),
+    new THREE.Color(0x49453f),
+    new THREE.Color(0xb39472)
 ];
 
 let rockSeed = 817259;
@@ -677,7 +689,13 @@ const rockGroups = rockShapes.map(geometry => {
 });
 
 const rockObject = new THREE.Object3D();
+const rockGroundNormal = new THREE.Vector3();
+const rockGroundRotation = new THREE.Quaternion();
 
+const localRockClusters = Array.from({ length: 14 }, () => ({
+    x:(rockRandom()-.5)*330,z:(rockRandom()-.5)*330,spread:5+rockRandom()*13,
+    angle:rockRandom()*Math.PI*2,kind:Math.floor(rockRandom()*3)
+}));
 for (let i = 0; i < CONFIG.ROCK_COUNT; i++) {
     const nearRover = rockRandom() < 0.65;
 
@@ -685,8 +703,11 @@ for (let i = 0; i < CONFIG.ROCK_COUNT; i++) {
         ? 230
         : CONFIG.TERRAIN_SIZE - 8;
 
-    const x = (rockRandom() - 0.5) * areaSize;
-    const z = (rockRandom() - 0.5) * areaSize;
+    const clustered = rockRandom()<.72;
+    const cluster = localRockClusters[Math.floor(rockRandom()*localRockClusters.length)];
+    const bearing = rockRandom()*Math.PI*2, reach = Math.sqrt(rockRandom())*cluster.spread;
+    const x = clustered ? cluster.x+Math.cos(bearing)*reach : (rockRandom()-.5)*areaSize;
+    const z = clustered ? cluster.z+Math.sin(bearing)*reach : (rockRandom()-.5)*areaSize;
 
     if (
         Math.hypot(x, z) <
@@ -696,18 +717,21 @@ for (let i = 0; i < CONFIG.ROCK_COUNT; i++) {
     }
 
     const region = getMarsRegion(x, z);
-    const density = 0.75 - region.dunes * 0.65 - region.lake * 0.64 + region.basalt * 0.25;
+    const habitat = localSurfaceWeights(x,50000,z);
+    const density = (0.75 - region.dunes*.65 - region.lake*.64 + region.basalt*.25) *
+        (clustered ? 1.3 : .35+habitat.gravel*.8+habitat.slab*.6);
     if (rockRandom() > density) continue;
     const sizeRoll = rockRandom();
 
-    const radius = sizeRoll > (region.basalt > 0.4 ? 0.83 : 0.94)
+    const deposit = clustered ? cluster.kind : habitat.slab>.45?1:0;
+    const radius = deposit===1 ? .35+Math.pow(rockRandom(),2)*1.4 : deposit===0 ? .045+Math.pow(rockRandom(),2)*.38 : sizeRoll > (region.basalt > 0.4 ? 0.83 : 0.94)
         ? 0.65 + rockRandom() * (region.basalt > 0.4 ? 1.8 : 1)
         : 0.06 + Math.pow(
         rockRandom(), 2.1
     ) * 0.62;
 
     const group = rockGroups[
-        Math.floor(rockRandom() * rockGroups.length)
+        deposit===1 ? [0,3,6][Math.floor(rockRandom()*3)] : Math.floor(rockRandom() * rockGroups.length)
         ];
 
     const index = group.count++;
@@ -715,19 +739,27 @@ for (let i = 0; i < CONFIG.ROCK_COUNT; i++) {
 
     rockObject.position.set(
         x,
-        y + radius * 0.30,
+        y + radius * (0.12 + rockRandom() * 0.12),
         z
     );
 
     rockObject.rotation.set(
         (rockRandom() - 0.5) * 0.35,
-        rockRandom() * Math.PI * 2,
+        deposit===1 ? cluster.angle+(rockRandom()-.5)*.35 : rockRandom()*Math.PI*2,
         (rockRandom() - 0.5) * 0.35
     );
 
+    const supportSpan = Math.max(0.3, radius * 0.65);
+    const supportEast = getTerrainHeight(x + supportSpan, z), supportWest = getTerrainHeight(x - supportSpan, z);
+    const supportNorth = getTerrainHeight(x, z + supportSpan), supportSouth = getTerrainHeight(x, z - supportSpan);
+    const rockSlopeX = THREE.MathUtils.clamp((supportEast - supportWest) / (2 * supportSpan), -0.8, 0.8);
+    const rockSlopeZ = THREE.MathUtils.clamp((supportNorth - supportSouth) / (2 * supportSpan), -0.8, 0.8);
+    rockObject.position.y = Math.min(y, supportEast, supportWest, supportNorth, supportSouth) + radius * 0.18;
+    rockGroundNormal.set(-rockSlopeX * 0.8, 1, -rockSlopeZ * 0.8).normalize();
+    rockObject.quaternion.premultiply(rockGroundRotation.setFromUnitVectors(UP, rockGroundNormal));
     rockObject.scale.set(
-        radius * (0.85 + rockRandom() * 0.55),
-        radius * (0.50 + rockRandom() * 0.45),
+        radius * (deposit===1 ? 1.8+rockRandom()*1.5 : .85+rockRandom()*.55),
+        radius * (deposit===1 ? .3 : .50+rockRandom()*.45),
         radius * (0.85 + rockRandom() * 0.55)
     );
 
@@ -738,6 +770,8 @@ for (let i = 0; i < CONFIG.ROCK_COUNT; i++) {
     tmpColor.copy(rockColors[Math.floor(rockRandom() * rockColors.length)]);
     tmpColor.lerp(darkBasalt, region.basalt * 0.8);
     tmpColor.lerp(lightDust, region.mesas * 0.35);
+    if(deposit===1)tmpColor.lerp(cliffRock,.45);
+    else if(deposit===0)tmpColor.lerp(darkBasalt,.25);
     group.setColorAt(index, tmpColor);
 
     // Every visible stone has the same scaled, rotated hull in Rapier.
@@ -809,16 +843,36 @@ let suspensionSolver = null;
 let suspensionTracking = false;
 let suspensionLoad = 0;
 const keys = new Set();
+let lastForwardPress = -Infinity;
+let keyboardTurbo = false;
 const touchControls = createTouchControls();
+const flightKeyboard = () => poweredFlight;
+const keyboardActions = ['KeyW', 'KeyS', 'KeyA', 'KeyD', 'Space', 'KeyC', 'KeyF', 'KeyG', 'KeyZ', 'KeyX',
+    'KeyQ', 'KeyE', 'ShiftLeft', 'ShiftRight', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
 const input = { has: code => {
-    if (beaconRace?.movementLocked && ['KeyW', 'KeyS', 'KeyA', 'KeyD', 'Space', 'KeyF', 'KeyG', 'KeyZ', 'KeyX', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(code)) {
-        return code === 'Space';
+    if (beaconRace?.movementLocked && keyboardActions.includes(code)) return code === 'Space';
+    let pressed;
+    switch (code) {
+        case 'Space': pressed = (flightKeyboard() ? keys.has('KeyF') : keys.has('KeyC')); break;
+        case 'KeyZ': pressed = keys.has('Space') || keys.has('KeyZ'); break;
+        case 'KeyX': pressed = keys.has('KeyC') || keys.has('KeyX'); break;
+        case 'KeyG': pressed = (keyboardTurbo && keys.has('KeyW')) || keys.has('KeyG'); break;
+        case 'KeyF': pressed = false; break; // Keyboard jumps are edge-triggered below.
+        // E is reserved for scanning on the ground.
+        case 'KeyE': pressed = !flightKeyboard() && keys.has('KeyE'); break;
+        default: pressed = keys.has(code);
     }
-    return keys.has(code) || touchControls.has(code);
+    return pressed || touchControls.has(code);
 } };
 function controlAxis(name, positive, negative) {
     if (beaconRace?.movementLocked) return 0;
-    const keyboard = Number(keys.has(positive)) - Number(keys.has(negative));
+    let keyboard = Number(keys.has(positive)) - Number(keys.has(negative));
+    if (name === 'strafe') keyboard = 0;
+    if (name === 'steering') {
+        const left = keys.has(positive) || keys.has('ArrowLeft');
+        const right = keys.has(negative) || keys.has('ArrowRight');
+        keyboard = Number(left) - Number(right);
+    }
     return keyboard || touchControls.axis?.(name) || 0;
 }
 let hopHeld = false, hopRequested = false, hopAirborne = false;
@@ -963,9 +1017,11 @@ function updateDrivePhysics(throttle, delta, pivotTurn = 0, pivotAlignment = 0) 
     stepDrive(driveState, {
         throttle,
         racing: beaconRace?.racing ?? false,
+        groundBoost: keyboardTurbo && keys.has('KeyW'),
         brake: input.has('Space'),
         steering: currentSteering,
         flightBoost: input.has('KeyG'),
+        assistedFlight: poweredFlight,
         airPitch: poweredFlight ? currentPitch : 0,
         airClearance: rover.position.y - getTerrainHeight(rover.position.x, rover.position.z),
         airSteering: controlAxis('steering', 'KeyA', 'KeyD'),
@@ -1285,7 +1341,24 @@ function createWheelAssembly(
 // -----------------------------------------------------------------------------
 
 function updateSuspension(delta) {
-    if (!rover || !suspensionSolver || hopAirborne) return;
+    if (!rover || !suspensionSolver) return;
+    if (hopAirborne || poweredFlight) {
+        // Unloaded joints return to their neutral pose instead of retaining
+        // the last rock contact. Keep the normal articulation speed limit.
+        const response = 1 - Math.exp(-CONFIG.SUSPENSION_RESPONSE * delta);
+        const relax = angle => angle + THREE.MathUtils.clamp(-angle * response,
+            -CONFIG.SUSPENSION_JOINT_SPEED * delta, CONFIG.SUSPENSION_JOINT_SPEED * delta);
+        suspensionSides.forEach(side => {
+            side.rockerAngle = relax(side.rockerAngle);
+            side.bogieAngle = relax(side.bogieAngle);
+            side.rocker.rotation.x = side.rockerAngle;
+            side.bogie.rotation.x = side.bogieAngle;
+        });
+        suspensionTracking = false;
+        suspensionLoad *= Math.exp(-8 * delta);
+        rover.updateMatrixWorld(true);
+        return;
+    }
     applyRoverOrientation();
     const target = suspensionSolver.solve(rover.position, roverYaw, currentPitch, currentRoll, {
         rocker: suspensionSides[0].rockerAngle,
@@ -1618,13 +1691,18 @@ window.addEventListener('keydown', event => {
     }
     if (planetView?.active) return;
     if (
-        ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR', 'Space', 'KeyF', 'KeyG', 'KeyZ', 'KeyX', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']
-            .includes(event.code)
+        keyboardActions.includes(event.code)
     ) {
         event.preventDefault();
     }
 
+    if (event.code === 'KeyW' && !event.repeat) {
+        const now = performance.now();
+        keyboardTurbo = now - lastForwardPress <= 300;
+        lastForwardPress = keyboardTurbo ? -Infinity : now;
+    }
     keys.add(event.code);
+    if (event.code === 'KeyF' && !event.repeat && !flightKeyboard()) hopRequested = true;
 
     if (event.code === 'KeyR' && !event.repeat) {
         window.location.reload();
@@ -1633,13 +1711,20 @@ window.addEventListener('keydown', event => {
 
 window.addEventListener('keyup', event => {
     keys.delete(event.code);
+    if (event.code === 'KeyW') keyboardTurbo = false;
 });
 
 window.addEventListener('blur', () => {
     keys.clear();
+    keyboardTurbo = false;
+    lastForwardPress = -Infinity;
 });
 document.addEventListener('visibilitychange', () => {
-    if (document.hidden) keys.clear();
+    if (document.hidden) {
+        keys.clear();
+        keyboardTurbo = false;
+        lastForwardPress = -Infinity;
+    }
 });
 
 // -----------------------------------------------------------------------------
@@ -1677,9 +1762,10 @@ function updateRover(delta) {
     const flightKey = input.has('KeyG');
     const descendKey = input.has('KeyX');
     const continuousLift = input.has('KeyZ');
-    if (((continuousLift && !descendKey) || ((flightKey || descendKey) &&
-        (hopAirborne || groundContact <= 0))) && !beaconRace?.movementLocked) {
-        if (!poweredFlight) { flightRadialSpeed = 0; flightPitch = currentPitch; }
+    // Only an explicit takeoff engages flight; bumps, braking and ground turbo
+    // must leave an unsupported rover following its ballistic trajectory.
+    if (continuousLift && !descendKey && !beaconRace?.movementLocked) {
+        if (!poweredFlight) { flightRadialSpeed = verticalVelocity; flightPitch = currentPitch; }
         poweredFlight = true; hopAirborne = true; suspensionTracking = false; groundContact = 0;
     }
     if (launch && !beaconRace?.movementLocked) {
@@ -1707,12 +1793,8 @@ function updateRover(delta) {
         // Positive local X pitch raises the nose (the rover faces local -Z).
         const pitchInput = controlAxis('pitch', 'ArrowDown', 'ArrowUp');
         const stabilizing = input.has('Space') || descendKey;
-        if (stabilizing) flightPitch *= Math.exp(-3 * delta * (1 - terrainBlend));
-        else if (Math.abs(pitchInput) < 0.001) {
-            flightPitch *= Math.exp(-1.8 * delta * (1 - terrainBlend));
-        }
-        else flightPitch = THREE.MathUtils.clamp(flightPitch + pitchInput * 0.85 * delta,
-            -THREE.MathUtils.degToRad(85), THREE.MathUtils.degToRad(85));
+        const desiredPitch = stabilizing ? 0 : pitchInput * CONFIG.AIR_PITCH_LIMIT;
+        flightPitch += (desiredPitch - flightPitch) * (1 - Math.exp(-5 * delta));
         // Reframing transports the rendered attitude; retain the pilot's pitch
         // relative to the new local horizon instead of accumulating curvature.
         let targetPitch = flightPitch;
@@ -1730,8 +1812,8 @@ function updateRover(delta) {
             targetPitch = THREE.MathUtils.lerp(flightPitch, slopePitch, terrainBlend);
             targetRoll = THREE.MathUtils.lerp(bank, slopeRoll, terrainBlend);
         }
-        currentPitch += (targetPitch - currentPitch) * (1 - Math.exp(-5 * delta));
-        currentRoll += (targetRoll - currentRoll) * (1 - Math.exp(-5 * delta));
+        currentPitch += (targetPitch - currentPitch) * (1 - Math.exp(-8 * delta));
+        currentRoll += (targetRoll - currentRoll) * (1 - Math.exp(-6 * delta));
         if (terrainBlend > 0) {
             // Attitude changes also move the tires. Keep their previous gap
             // while rotating so the uphill side cannot cut into the slope.
@@ -1750,7 +1832,7 @@ function updateRover(delta) {
         const forwardInput = controlAxis('throttle', 'KeyW', 'KeyS');
         const diving = !continuousLift && !stabilizing && forwardInput !== 0 && Math.abs(currentPitch) > 0.005;
         if (!input.has('Space') && (continuousLift || descendKey || diving)) {
-            const ascent = THREE.MathUtils.lerp(60, CONFIG.FLIGHT_ASCENT_SPEED,
+            const ascent = THREE.MathUtils.lerp(flightKey ? 45 : 18, CONFIG.FLIGHT_ASCENT_SPEED,
                 THREE.MathUtils.smoothstep(clearance, 100, 5000));
             // Fast orbital descent, then progressively softer approach. The
             // curve's gradient stays below the braking response, so the motor
@@ -1802,7 +1884,7 @@ function updateRover(delta) {
     const steeringLimit = THREE.MathUtils.lerp(
         CONFIG.MAX_STEERING_ANGLE,
         CONFIG.MAX_STEERING_ANGLE * CONFIG.STEERING_HIGH_SPEED_FACTOR,
-        Math.min(1, Math.abs(currentSpeed) / CONFIG.MAX_SPEED)
+        THREE.MathUtils.smoothstep(Math.abs(currentSpeed), 0, CONFIG.MAX_SPEED)
     );
     currentSteering = THREE.MathUtils.lerp(
         currentSteering,
@@ -1849,7 +1931,11 @@ function updateRover(delta) {
         if (clearance < 80) {
             // Orbital-speed tangential motion can leave a tiny planet even
             // after grazing it. Dissipate that energy before a low pass/landing.
-            const landingSpeed = Math.max(CONFIG.AIR_BOOST_LOW_ALTITUDE_SPEED,
+            const lowPassSpeed = poweredFlight
+                ? THREE.MathUtils.lerp(40, CONFIG.AIR_BOOST_LOW_ALTITUDE_SPEED,
+                    THREE.MathUtils.smoothstep(clearance, 0.5, 8))
+                : 40;
+            const landingSpeed = Math.max(lowPassSpeed,
                 Math.sqrt(160 * Math.max(0, clearance - 0.5)));
             const blend = THREE.MathUtils.smoothstep(clearance, 35, 80);
             const safeSpeed = THREE.MathUtils.lerp(landingSpeed, CONFIG.AIR_BOOST_CRUISE_SPEED, blend);
@@ -1868,6 +1954,12 @@ function updateRover(delta) {
     const oldLateral = driveState.lateralSpeed;
     driveState.speed = oldSpeed * Math.cos(yawStep) - oldLateral * Math.sin(yawStep);
     driveState.lateralSpeed = oldLateral * Math.cos(yawStep) + oldSpeed * Math.sin(yawStep);
+    if (poweredFlight && !input.has('Space') && Math.abs(controlAxis('strafe', 'ArrowLeft', 'ArrowRight')) < 0.01) {
+        // Flight assistance bends the trajectory into a turn instead of leaving
+        // the rover pointed sideways to an unchanged world-space velocity.
+        const response = CONFIG.AIR_HEADING_RESPONSE / (1 + Math.abs(driveState.speed) / 500);
+        driveState.lateralSpeed *= Math.exp(-response * delta);
+    }
     currentSpeed = driveState.speed;
     roverYaw += yawStep;
     applyRoverOrientation();
@@ -2609,14 +2701,14 @@ function updateRoverVisuals(delta) {
     }
     rover.updateMatrixWorld(true);
     wheelEffects.update(delta, wheelAssemblies, currentSpeed, wheelSlip, roverYaw);
-    const airThrustActive = groundContact <= 0 && !input.has('Space');
+    const airThrustActive = poweredFlight && !input.has('Space');
     airThrustVisual.set(airThrustActive ? -(driveState.airStrafe ?? 0) : 0, 0,
         airThrustActive ? -(driveState.throttle ?? 0) * Math.cos(poweredFlight ? currentPitch : 0) : 0).applyQuaternion(yawQuaternion);
     if (poweredFlight) {
         planet.upAt(rover.position, gravityDirection);
         airThrustVisual.addScaledVector(gravityDirection, flightVerticalThrust);
     }
-    const airTurn = groundContact <= 0
+    const airTurn = poweredFlight
         ? controlAxis('steering', 'KeyA', 'KeyD') : 0;
     wheelThrusterEffects.update(delta, wheelAssemblies, rover.quaternion,
         airThrustVisual, airTurn, rover.position);
@@ -2635,7 +2727,7 @@ world.timestep = CONFIG.PHYSICS_STEP;
 world.step();
 
 let lastFrameTimestamp = null;
-const activityKeys = ['KeyW', 'KeyS', 'KeyA', 'KeyD', 'KeyF', 'KeyG', 'KeyZ', 'KeyX', 'Space', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
+const activityKeys = keyboardActions;
 document.addEventListener('visibilitychange', () => {
     physicsAccumulator = 0;
     lastFrameTimestamp = null;

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { localGroundRelief } from './local-surface.js';
 import { shapeMarsTerrain } from './mars-world.js';
 
 export function hash(x, z) {
@@ -273,10 +274,7 @@ export function getHomeTerrainHeight(x, z) {
     );
 
     const baseHeight = (
-        hills +
-        uneven +
-        bumps +
-        rocks +
+        localGroundRelief(x, 50000, z, hills, uneven, bumps + rocks) +
         mountains +
         mountainTexture +
         craterHeight(x, z)

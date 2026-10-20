@@ -14,6 +14,19 @@ export function stepDrive(state, input, dt, config) {
     const previousSpeed = state.speed;
     state.throttle = smooth(state.throttle ?? 0, brake ? 0 : throttle,
         throttle ? config.THROTTLE_RESPONSE : config.THROTTLE_RELEASE_RESPONSE, dt);
+    if (contact <= 0 && !input.assistedFlight) {
+        // Leaving a slope is a ballistic jump, even while ground turbo is held.
+        // Only explicit powered flight can apply airborne thrust or steering.
+        state.thruster = 0;
+        state.driveAssist = 0;
+        state.airAcceleration = 0;
+        state.airStrafe = 0;
+        state.yawRate = smooth(state.yawRate ?? 0, 0, config.AIR_YAW_RESPONSE, dt);
+        state.acceleration = 0;
+        state.slip = smooth(state.slip ?? 0, 0, config.WHEEL_SPIN_RESPONSE, dt);
+        state.hillHold = 0;
+        return;
+    }
     if (contact <= 0) {
         // Reaction thrusters work without tyre grip. Keep momentum in the body
         // frame; the caller rotates it when yaw changes to preserve world velocity.
@@ -23,26 +36,40 @@ export function stepDrive(state, input, dt, config) {
         const directionalThrust = throttle !== 0 || (input.airStrafe ?? 0) !== 0;
         const driftDamping = input.flightBoost && directionalThrust
             ? config.AIR_BOOST_DRIFT_DAMPING : config.AIR_DRIFT_DAMPING;
-        const damping = Math.exp(-(brake ? config.AIR_BRAKING_RESPONSE : driftDamping) * dt);
+        const damping = Math.exp(-(brake ? config.AIR_BRAKING_RESPONSE : input.assistedFlight ? 0 : driftDamping) * dt);
         const pitchProjection = Math.cos(input.airPitch ?? 0);
         const forwardAcceleration = input.flightBoost && throttle > 0
             ? config.AIR_FORWARD_BOOST_ACCELERATION : thrustAcceleration;
-        const clearanceBlend = smoothstep(input.airClearance ?? 20, 2, 15);
+        const clearanceBlend = smoothstep(input.airClearance ?? 20, 40, 2500);
         const cruiseSpeed = config.AIR_BOOST_LOW_ALTITUDE_SPEED +
             (config.AIR_BOOST_CRUISE_SPEED - config.AIR_BOOST_LOW_ALTITUDE_SPEED) * clearanceBlend;
         let forwardForce = throttle === 0 ? 0 : state.throttle * forwardAcceleration * pitchProjection;
-        if (throttle === 0) state.airAcceleration = Math.min(0, state.airAcceleration ?? 0);
+        if (input.assistedFlight && (!input.flightBoost || throttle < 0)) {
+            const target = state.throttle * (state.throttle < 0 ? config.AIR_REVERSE_SPEED : Math.min(config.AIR_CRUISE_SPEED, cruiseSpeed)) * pitchProjection;
+            const slowing = state.speed * target < 0 || Math.abs(state.speed) > Math.abs(target);
+            const limit = slowing ? Math.min(config.AIR_FORWARD_BOOST_ACCELERATION,
+                Math.max(thrustAcceleration, Math.abs(state.speed - target) * 0.9)) : thrustAcceleration;
+            forwardForce = clamp((target - state.speed) * config.AIR_SPEED_RESPONSE, -limit, limit);
+        } else if (input.assistedFlight && throttle === 0) {
+            forwardForce = clamp(-state.speed * 0.9,
+                -config.AIR_FORWARD_BOOST_ACCELERATION, config.AIR_FORWARD_BOOST_ACCELERATION);
+        } else if (throttle === 0) state.airAcceleration = Math.min(0, state.airAcceleration ?? 0);
         if (input.flightBoost && throttle > 0) {
             const target = Math.max(0, state.throttle) * cruiseSpeed * pitchProjection;
             forwardForce = clamp((target - state.speed) * config.AIR_BOOST_SPEED_RESPONSE,
                 -config.AIR_FORWARD_BOOST_ACCELERATION, config.AIR_FORWARD_BOOST_ACCELERATION);
         }
-        state.airAcceleration = approach(state.airAcceleration ?? 0, brake ? 0 : forwardForce, (input.flightBoost && throttle > 0 ? config.AIR_BOOST_ACCELERATION_RAMP : 300) * dt);
+        state.airAcceleration = approach(state.airAcceleration ?? 0, brake ? 0 : forwardForce, (input.flightBoost || (input.assistedFlight && Math.abs(state.speed) > 100) ? config.AIR_BOOST_ACCELERATION_RAMP : input.assistedFlight ? 35 : 300) * dt);
         state.speed = (state.speed + (brake ? 0 : state.airAcceleration * dt)) * damping;
         const strafe = brake ? 0 : (input.airStrafe ?? 0);
         state.airStrafe = smooth(state.airStrafe ?? 0, strafe, config.THROTTLE_RESPONSE, dt);
-        // Side controls fire lateral thrusters instead of steering wheels in mid-air.
-        state.lateralSpeed = (state.lateralSpeed - state.airStrafe * thrustAcceleration * dt) * damping;
+        // A released lateral stick arrests the slide rather than leaving an
+        // accumulating sideways velocity. Unpowered jumps retain their momentum.
+        const sideForce = input.assistedFlight
+            ? clamp((-state.airStrafe * config.AIR_STRAFE_SPEED - state.lateralSpeed) * config.AIR_SPEED_RESPONSE,
+                -thrustAcceleration, thrustAcceleration)
+            : -state.airStrafe * thrustAcceleration;
+        state.lateralSpeed = (state.lateralSpeed + (brake ? 0 : sideForce * dt)) * damping;
         if (input.flightBoost && Math.abs(strafe) < 0.01) {
             state.lateralSpeed = approach(state.lateralSpeed, 0,
                 Math.max(config.AIR_LATERAL_STABILIZATION_ACCELERATION, Math.abs(state.lateralSpeed) * 1.5) * dt);
@@ -95,7 +122,7 @@ export function stepDrive(state, input, dt, config) {
         ? (1 - state.crawl) * (racingForward ? 1 : 1 - smoothstep(grade, 0.2, 0.65)) : 0;
     state.driveAssist = smooth(state.driveAssist ?? 0, thrustDemand, 5, dt);
     const roadSpeedLimit = throttle < 0 ? config.MAX_REVERSE_SPEED :
-        input.racing ? config.RACE_MAX_SPEED : config.MAX_SPEED;
+        input.racing ? config.RACE_MAX_SPEED : input.groundBoost ? config.GROUND_BOOST_SPEED : config.MAX_SPEED;
     const crawlLimit = roadSpeedLimit + (config.ROCK_CLIMB_SPEED - roadSpeedLimit) * state.crawl;
     // Keep vertical travel below the linkage's response speed. A horizontal
     // speed cap alone cannot prevent the chassis outrunning its wheels downhill.
