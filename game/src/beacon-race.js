@@ -123,6 +123,11 @@ export function createBeaconRace({ scene, world, physics, getHeight, getPlayer, 
             const length = Math.hypot(dx, dz), rx = -dz / length, rz = dx / length;
             const material = new THREE.MeshBasicMaterial({ color: 0x9d785b });
             const caps = [];
+            let signHeight = getHeight(gate.x, gate.z);
+            // Keep the sign above both shoulders and the center of a dune crest.
+            for (let offset = -4.6; offset <= 4.61; offset += 1.15) {
+                signHeight = Math.max(signHeight, getHeight(gate.x + rx * offset, gate.z + rz * offset));
+            }
             for (const sign of [-1, 1]) {
                 const x = gate.x + rx * 4.6 * sign, z = gate.z + rz * 4.6 * sign;
                 const y = getHeight(x, z);
@@ -132,18 +137,20 @@ export function createBeaconRace({ scene, world, physics, getHeight, getPlayer, 
                 cap.position.set(x, y + 2.4, z); group.add(cap); caps.push(cap);
                 colliders.push(world.createCollider(physics.ColliderDesc.cylinder(1.25, 0.1).setTranslation(x, y + 1.25, z)));
             }
-            const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 64;
+            const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 256;
             const context = canvas.getContext('2d');
             let label = null;
             if (context) {
-                context.fillStyle = 'rgba(40,29,21,0.85)'; context.fillRect(0, 0, 128, 64);
+                context.fillStyle = '#281d15'; context.fillRect(0, 0, 512, 256);
+                context.strokeStyle = '#ffcf80'; context.lineWidth = 10;
+                context.strokeRect(5, 5, 502, 246);
                 context.fillStyle = '#ffdfaa'; context.textAlign = 'center'; context.textBaseline = 'middle';
-                context.font = 'bold 36px system-ui';
-                context.fillText(index === gates.length - 1 ? 'META' : String(index + 1), 64, 34);
+                context.font = 'bold 136px system-ui';
+                context.fillText(index === gates.length - 1 ? 'META' : String(index + 1), 256, 136, 460);
                 const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
-                label = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthWrite: false }));
-                label.position.set(gate.x, getHeight(gate.x, gate.z) + 3.3, gate.z);
-                label.scale.set(2.6, 1.3, 1); group.add(label);
+                label = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: false, depthWrite: true, toneMapped: false, fog: false }));
+                label.position.set(gate.x, signHeight + 3.6, gate.z);
+                label.scale.set(3.2, 1.6, 1); group.add(label);
             }
             gateMeshes.push({ material, caps, label });
         });
