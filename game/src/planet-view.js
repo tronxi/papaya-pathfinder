@@ -112,6 +112,25 @@ export function createPlanetView({ renderer, planet, getPosition, onEnter, onExi
         #planet-orbit-panel button { background:#294348; border:1px solid #7caaa080; border-radius:4px; color:#e1eee7;
             min-height:40px; padding:8px 12px; font:inherit; cursor:pointer; touch-action:manipulation; }
         #planet-orbit-panel button[data-land] { background:#65503b; }
+        #planet-orbit-panel .orbit-header { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+        #planet-orbit-panel .orbit-options { margin-top:10px; }
+        #planet-orbit-panel .orbit-legend { margin-bottom:8px; font-size:10px; }
+        #planet-orbit-panel [data-options-toggle] { display:none; }
+        @media (max-width: 600px), (max-height: 500px) {
+            #planet-orbit-panel { bottom:max(8px,env(safe-area-inset-bottom)); width:min(460px,calc(100vw - 16px));
+                padding:8px; max-height:42dvh; overflow:hidden; font-size:11px; }
+            #planet-orbit-panel .orbit-header { margin-bottom:6px; }
+            #planet-orbit-panel strong { font-size:11px; flex-shrink:0; }
+            #planet-orbit-panel [data-readout] { min-width:0; font-size:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+            #planet-orbit-panel .orbit-primary { display:grid; grid-template-columns:44px 44px 1fr auto; gap:6px; }
+            #planet-orbit-panel button { min-height:44px; padding:6px 10px; }
+            #planet-orbit-panel [data-options-toggle] { display:block; }
+            #planet-orbit-panel .orbit-options { display:none; }
+            #planet-orbit-panel[data-expanded="true"] { display:flex; flex-direction:column; }
+            #planet-orbit-panel[data-expanded="true"] .orbit-options { display:block; overflow-y:auto; min-height:0;
+                overscroll-behavior:contain; border-top:1px solid #739b9444; padding-top:8px; }
+            #planet-orbit-panel .orbit-header, #planet-orbit-panel .orbit-primary { flex-shrink:0; }
+        }
         #rover-controls-help { width:min(520px,calc(100vw - 32px)); max-height:calc(100dvh - 48px);
             box-sizing:border-box; overflow-y:auto; padding:20px; border:1px solid #739b9477;
             border-radius:10px; background:#111e27; color:#dcece7; font:13px/1.6 ui-monospace,monospace; }
@@ -140,18 +159,29 @@ export function createPlanetView({ renderer, planet, getPosition, onEnter, onExi
     toggle.setAttribute('aria-controls', 'planet-orbit-panel'); toggle.setAttribute('aria-expanded', 'false');
     document.body.appendChild(toggle);
     const panel = document.createElement('aside'); panel.id = 'planet-orbit-panel'; panel.hidden = true;
-    panel.innerHTML = `<strong>MARTE · VISTA ORBITAL</strong><div data-readout></div>
-        <div style="font-size:10px"><span style="color:#ffd290">● Pendiente</span> · <span style="color:#9ce6c5">● Registrado</span> · ◉ Elegido</div>
-        <div class="orbit-buttons"><button type="button" data-in aria-label="Acercarse al planeta">+</button>
+    panel.innerHTML = `<div class="orbit-header"><strong>MARTE</strong><div data-readout></div></div>
+        <div class="orbit-buttons orbit-primary"><button type="button" data-in aria-label="Acercarse al planeta">+</button>
         <button type="button" data-out aria-label="Alejarse del planeta">−</button>
-        <button type="button" data-focus-objective>Centrar objetivo</button>
+        <button type="button" data-land>Descender aquí</button>
+        <button type="button" data-options-toggle aria-expanded="false" aria-controls="planet-orbit-options">Opciones</button></div>
+        <div id="planet-orbit-options" class="orbit-options">
+        <div class="orbit-legend"><span style="color:#ffd290">● Pendiente</span> · <span style="color:#9ce6c5">● Registrado</span> · ◉ Elegido</div>
+        <div class="orbit-buttons"><button type="button" data-focus-objective>Centrar objetivo</button>
         <button type="button" data-home>Ir a Base Papaya</button>
-        <button type="button" data-land>Descender aquí</button><button type="button" data-close>Volver al rover</button></div>`;
-    if (explorationPanel) panel.appendChild(explorationPanel);
+        <button type="button" data-close>Volver al rover</button></div></div>`;
+    const options = panel.querySelector('.orbit-options');
+    const optionsToggle = panel.querySelector('[data-options-toggle]');
+    function setExpanded(expanded) {
+        panel.dataset.expanded = String(expanded);
+        optionsToggle.setAttribute('aria-expanded', String(expanded));
+        optionsToggle.textContent = expanded ? 'Ocultar' : 'Opciones';
+    }
+    optionsToggle.addEventListener('click', () => setExpanded(panel.dataset.expanded !== 'true'));
+    if (explorationPanel) options.appendChild(explorationPanel);
     if (racePanel) {
         const races = document.createElement('details'); races.className = 'orbit-races';
         const summary = document.createElement('summary'); summary.textContent = 'Carreras';
-        races.append(summary, racePanel); panel.appendChild(races);
+        races.append(summary, racePanel); options.appendChild(races);
     }
     const helpButton = document.createElement('button');
     helpButton.type = 'button'; helpButton.textContent = 'Controles';
@@ -178,7 +208,7 @@ export function createPlanetView({ renderer, planet, getPosition, onEnter, onExi
         <h3>Explorar</h3><p>Abre ☰ y toca un punto del planeta para elegir un objetivo. Usa «Centrar objetivo» y «Descender aquí» para acercarte. Ya en tierra, sigue el minimapa y detente junto al objetivo para escanearlo.</p>
         <p>Arrastra el planeta para girarlo y usa + / − para acercarte o alejarte. «Ir a Base Papaya» te devuelve a la base.</p>
         <h3>Carreras</h3><p>Abre «Carreras» en el menú, elige una prueba y sigue las balizas en orden.</p>`;
-    panel.append(helpButton, help);
+    options.appendChild(helpButton); panel.appendChild(help);
     helpButton.addEventListener('click', () => help.showModal());
     help.querySelector('[data-dismiss-help]').addEventListener('click', () => help.close());
     // Escape dismisses the popup without also closing the orbital menu.
@@ -255,7 +285,20 @@ export function createPlanetView({ renderer, planet, getPosition, onEnter, onExi
         controls.rotateSpeed = dragSensitivity(); controls.update();
         marker.position.copy(position).normalize().multiplyScalar(radius * 1.008);
         patchDirection.set(0, 0, 0);
+        setExpanded(false);
         panel.hidden = false; objectives.show(); document.body.dataset.planetView = 'true';
+        // Fit the sphere to the narrowest screen dimension, reserving room for
+        // the compact toolbar instead of cropping the planet behind the menu.
+        const compact = window.matchMedia('(max-width: 600px), (max-height: 500px)').matches;
+        const toolbar = compact ? panel.getBoundingClientRect().height : 0;
+        const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
+        const visibleHeight = Math.max(100, window.innerHeight - 2 * (toolbar + 16));
+        const fitTangent = Math.tan(halfFov) * Math.min(
+            (window.innerWidth - 32) / window.innerHeight, visibleHeight / window.innerHeight);
+        altitude = targetAltitude = Math.max(radius * 1.8, radius / Math.sin(Math.atan(fitTangent)) - radius);
+        controls.maxDistance = Math.max(radius * 7, radius + altitude);
+        camera.position.copy(normal).multiplyScalar(radius + altitude);
+        controls.update();
         toggle.setAttribute('aria-expanded', 'true'); toggle.setAttribute('aria-label', 'Cerrar menú orbital'); onEnter?.();
     }
     function zoom(factor) { landingError = ''; targetAltitude = THREE.MathUtils.clamp(targetAltitude * factor, 8, radius * 6); }

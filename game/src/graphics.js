@@ -4,14 +4,18 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { createTerrainRenderLayers } from './terrain-render-layers.js';
 
 export function createGraphics(renderer, scene, camera) {
+    const terrain = createTerrainRenderLayers(renderer, scene, camera);
     if (mobileGraphics) {
-        // One scene pass with native antialiasing, without HDR/GTAO buffers.
+        // Native antialiasing without HDR/GTAO buffers.
         let resolutionScale = 1;
         let baseRatio = 1;
         let duration = 0, frames = 0;
         return {
+            setTerrainLayers: terrain.configure,
+            renderSurface: terrain.renderDirect,
             resize(width, height) {
                 baseRatio = Math.min(window.devicePixelRatio || 1, 2,
                     Math.sqrt(1500000 / Math.max(1, width * height)));
@@ -19,7 +23,7 @@ export function createGraphics(renderer, scene, camera) {
                 duration = 0; frames = 0;
             },
             render(delta) {
-                renderer.render(scene, camera);
+                terrain.renderDirect();
                 if (document.hidden || delta <= 0) return;
                 duration += delta; frames++;
                 // Back off gradually on slower devices; avoid constant quality
@@ -39,7 +43,8 @@ export function createGraphics(renderer, scene, camera) {
         samples: Math.min(2, renderer.capabilities.maxSamples)
     });
     const composer = new EffectComposer(renderer, target);
-    composer.addPass(new RenderPass(scene, camera));
+    const worldPass = new RenderPass(scene, camera);
+    composer.addPass(worldPass);
     const contactShadows = new GTAOPass(scene, camera);
     contactShadows.blendIntensity = 0.35;
     contactShadows.updateGtaoMaterial({ radius: 0.55, thickness: 0.4,
@@ -48,6 +53,17 @@ export function createGraphics(renderer, scene, camera) {
     composer.addPass(contactShadows);
     composer.addPass(new OutputPass());
     return {
+        setTerrainLayers(layers) {
+            terrain.configure(layers);
+            terrain.scenes.forEach((background, index) => {
+                const pass = new RenderPass(background, camera);
+                pass.clear = index === 0;
+                pass.clearDepth = index > 0;
+                composer.insertPass(pass, index);
+            });
+            worldPass.clear = false; worldPass.clearDepth = true;
+        },
+        renderSurface: terrain.renderDirect,
         resize(width, height) {
             // Bound Retina render cost without falling back to the phone profile.
             const ratio = Math.min(window.devicePixelRatio || 1, 1.5,
@@ -59,6 +75,9 @@ export function createGraphics(renderer, scene, camera) {
             contactShadows.setSize(Math.max(1, Math.round(width * ratio * 0.5)),
                 Math.max(1, Math.round(height * ratio * 0.5)));
         },
-        render(delta, groundDetail = true) { contactShadows.enabled = groundDetail; composer.render(delta); }
+        render(delta, groundDetail = true) {
+            contactShadows.enabled = groundDetail;
+            terrain.withBackgrounds(() => composer.render(delta));
+        }
     };
 }

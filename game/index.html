@@ -8,9 +8,13 @@
     body { margin: 0; overflow: hidden; }
     canvas { display: block; }
     canvas[hidden] { display: none; }
+    #world-loading { position: fixed; inset: 0; z-index: 100000; display: grid;
+      place-items: center; background: #211a17; color: #e6d1b6;
+      font: 16px system-ui, sans-serif; }
   </style>
 </head>
 <body>
+<div id="world-loading" role="status">Preparando el paisaje…</div>
 <script type="module" src="src/main.js"></script>
 </body>
 </html>

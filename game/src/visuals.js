@@ -67,15 +67,22 @@ export function addMarsSurfaceDetail(material, rocky = false, rockTextures = nul
         ` + shader.fragmentShader;
         shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
             #include <color_fragment>
+            float marsFootprint = max(length(dFdx(marsPosition)), length(dFdy(marsPosition)));
             float mottling = marsNoise(marsPosition.xz * ${rocky ? '8.0' : '1.8'});
             float grains = marsNoise(marsPosition.xz * 95.0);
             float strata = sin(marsPosition.y * ${rocky ? '32.0' : '5.5'} +
                 marsNoise(marsPosition.xz * 0.7) * 3.0);
+            // Average only subpixel frequencies, avoiding crawling pixels in flight.
+            mottling = mix(mottling, 0.5, smoothstep(0.15, 1.0, marsFootprint));
+            grains = mix(grains, 0.5, smoothstep(0.003, 0.025, marsFootprint));
+            strata *= 1.0 - smoothstep(0.1, 1.0, marsFootprint);
             float detail = 0.94 + mottling * 0.10 + grains * 0.035 + strata * ${rocky ? '0.035' : '0.018'};
             diffuseColor.rgb *= detail;
             ${rocky ? '' : `
                 float dustBasin = marsNoise(marsPosition.xz * 0.055);
                 float mineralBed = marsNoise(marsPosition.xz * 0.14 + vec2(19.0, 7.0));
+                dustBasin = mix(dustBasin, 0.5, smoothstep(5.0, 35.0, marsFootprint));
+                mineralBed = mix(mineralBed, 0.5, smoothstep(2.0, 15.0, marsFootprint));
                 vec3 paleDust = vec3(1.06, 1.14, 1.22);
                 vec3 basaltDust = vec3(0.84, 0.88, 0.96);
                 diffuseColor.rgb *= mix(vec3(1.0), paleDust, smoothstep(0.43, 0.78, dustBasin) * 0.65);

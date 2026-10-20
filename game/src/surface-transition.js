@@ -1,5 +1,5 @@
-// Fade opaque terrain with screen-door coverage, retaining its depth and shadow
-// behavior. Clones isolate shared rover materials and preserve shader hooks.
+// Blend surface coverage continuously, without a visible screen-door pattern.
+// Clones isolate shared materials and preserve shader hooks.
 export function createSurfaceTransition(root, uniformName = 'surfaceCoverage') {
     const materials = new WeakMap();
     const coverage = { value: 1 };
@@ -14,6 +14,7 @@ export function createSurfaceTransition(root, uniformName = 'surfaceCoverage') {
                 if (source.userData.surfaceTransitions?.[uniformName] === coverage) return source;
                 if (materials.has(source)) return materials.get(source);
                 const material = source.clone();
+                material.transparent = true;
                 material.userData = { ...source.userData, surfaceTransitions: {
                     ...source.userData.surfaceTransitions, [uniformName]: coverage
                 } };
@@ -23,12 +24,12 @@ export function createSurfaceTransition(root, uniformName = 'surfaceCoverage') {
                     shader.fragmentShader = `uniform float ${uniformName};\n` + shader.fragmentShader;
                     shader.fragmentShader = shader.fragmentShader.replace('#include <alphatest_fragment>', `
                         #include <alphatest_fragment>
-                        float ${uniformName}Door = fract(52.9829189 * fract(dot(floor(gl_FragCoord.xy), vec2(0.06711056, 0.00583715))));
-                        if (${uniformName} <= ${uniformName}Door) discard;
+                        if (${uniformName} <= 0.0) discard;
+                        diffuseColor.a *= ${uniformName};
                     `);
                 };
                 const sourceKey = source.customProgramCacheKey();
-                material.customProgramCacheKey = () => sourceKey + '-surface-transition-' + uniformName;
+                material.customProgramCacheKey = () => sourceKey + '-smooth-surface-transition-' + uniformName;
                 materials.set(source, material); materials.set(material, material);
                 return material;
             }

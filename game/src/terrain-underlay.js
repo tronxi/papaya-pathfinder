@@ -95,7 +95,7 @@ export function createTerrainUnderlayMask() {
             if (homeFrame) for (let z = -4; z < 4; z++) for (let x = -4; x < 4; x++) cover(x, z);
             // Only remove the backing mesh once the replacement is opaque.
             for (const tile of tiles.values()) {
-                if (tile.progress >= 1 && tile.visibleCoverage >= 0.999 && !tile.morphTarget) cover(tile.tx, tile.tz);
+                if (tile.progress >= 1 && tile.visibleCoverage >= 0.999 && !tile.morph) cover(tile.tx, tile.tz);
             }
             if (!changed) for (let i = 0; i < pixels.length; i++) {
                 if (pixels[i] !== nextPixels[i]) { changed = true; break; }
